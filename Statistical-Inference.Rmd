@@ -1,0 +1,1855 @@
+---
+title: "ResearchQuestionsAnswered"
+date: "2026-03-30"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(scales)
+library(ggplot2)
+library(stringr)
+```
+
+```{r}
+brfss1 <- read.csv("completed1_full_brfss.csv",check.names = FALSE)
+```
+
+```{r}
+head(brfss1)
+```
+
+```{r}
+names(brfss1) <- sub("^_", "", names(brfss1))
+```
+
+```{r}
+round(colMeans(is.na(brfss1))*100,2)
+```
+
+```{r}
+
+library(dplyr)
+library(stringr)
+
+brfss1 <- brfss1 |>
+  mutate(across(where(is.character), str_trim))
+
+```
+
+```{r}
+brfss1$GENHLTH <- factor(
+  brfss1$GENHLTH,
+  levels = c("Excellent", "Very good", "Good", "Fair", "Poor"),
+  ordered = TRUE
+)
+brfss1$ADDEPEV3  <- factor(brfss1$ADDEPEV3)
+brfss1$DECIDE    <- factor(brfss1$DECIDE)
+brfss1$DIFFALON  <- factor(brfss1$DIFFALON)
+brfss1$LSATISFY <- factor(
+  brfss1$LSATISFY,
+  levels = c("Very satisfied", "Satisfied", "Dissatisfied", "Very dissatisfied")
+)
+brfss1$EMTSUPRT <- factor(
+  brfss1$EMTSUPRT,
+  levels = c("Always", "Usually", "Sometimes", "Rarely", "Never")
+)
+brfss1$SDLONELY <- factor(
+  brfss1$SDLONELY,
+  levels = c("Never", "Rarely", "Sometimes", "Usually", "Always"),
+
+)
+brfss1$HOWSAFE1 <- factor(
+  brfss1$HOWSAFE1,
+  levels = c("Extremely safe", "Safe", "Unsafe", "Extremely Unsafe")
+)
+brfss1$BMI5CAT <- factor(
+  brfss1$BMI5CAT,
+  levels = c("Underweight", "Normal", "Overweight", "Obese")
+
+)
+brfss1$INCOMG1 <- factor(
+  brfss1$INCOMG1,
+  levels = c("<$15k", "$15-25k", "$25-35k", "$35-50k", "$50k-$100k", "$100k-$200k", ">$200k")
+)
+brfss1$SMOKER3 <- factor(
+  brfss1$SMOKER3,
+  levels = c("Never smoked", "Former smoker", "Someday smoker", "Everyday smoker")
+)
+brfss1$EXERANY2  <- factor(brfss1$EXERANY2)
+brfss1$MARITAL  <- factor(brfss1$MARITAL)
+brfss1$EDUCA  <- factor(brfss1$EDUCA)
+brfss1$EMPLOY1  <- factor(brfss1$EMPLOY1)
+brfss1$RACE  <- factor(brfss1$RACE)
+brfss1$SEX  <- factor(brfss1$SEX)
+brfss1$AGEG5YR <- factor(
+  brfss1$AGEG5YR,
+  levels = c(
+    "18-24", "25-29", "30-34", "35-39", "40-44",
+    "45-49", "50-54", "55-59", "60-64", "65-69",
+    "70-74", "75-79", "80+"
+  )
+)
+brfss1$state_name  <- factor(brfss1$state_name)
+```
+
+```{r}
+
+# We are creating 4 distinct levels based on the days reported
+brfss1 <- brfss1 %>%
+  mutate(MENTHLTH_CAT = case_when(
+    MENTHLTH == 0 ~ "0: Resilient",
+    MENTHLTH >= 1 & MENTHLTH <= 13 ~ "1-13: Low/Moderate",
+    MENTHLTH >= 14 & MENTHLTH <= 29 ~ "14-29: Frequent",
+    MENTHLTH == 30 ~ "30: Chronic"
+  ))
+
+
+brfss1$MENTHLTH_CAT <- factor(brfss1$MENTHLTH_CAT, 
+                               levels = c("0: Resilient", 
+                                          "1-13: Low/Moderate", 
+                                          "14-29: Frequent", 
+                                          "30: Chronic"),
+                               ordered = TRUE)
+
+
+table(brfss1$MENTHLTH_CAT)
+
+```
+
+```{r}
+library(survey)
+# Creating the survey design using ONLY the weight variable
+brfss_design <- svydesign(
+  id = ~1,                
+  weights = ~ LLCPWT,     
+  data = brfss1           
+)
+```
+
+The hypotheses tested below represent population(US Adults) estimates for the U.S. states, territories, and District of Columbia where social determinants questions were administered.
+
+**INCOME**
+
+Null Hypothesis (H0): There is no difference in the population mean of poor mental health days across different income groups.
+
+Alternative Hypothesis (H1): The population mean of poor mental health days differs for at least one income group.
+
+For this research question, I conducted a Design-Based One-Way Analysis of Variance (ANOVA) using a Wald Test (via the regTermTest function in R). This test evaluates whether there are statistically significant differences in the mean of a continuous dependent variable (Poor Mental Health Days) across the levels of a categorical independent variable (Income Groups).
+
+```{r}
+model <- svyglm(MENTHLTH ~ INCOMG1, design = brfss_design)
+
+regTermTest(model, "INCOMG1")
+```
+
+At a significance level of alpha = 0.05 , the results showed a statistically significant difference in the mean number of poor mental health days across income groups ( F ( 6 , 221795 ) = 111.83 , p < 0.001 ) . Since the p-value is less than 0.05, the null hypothesis was rejected, indicating that the mean number of poor mental health days varies significantly across income groups among adults in the selected 33 states/territories in the United States.
+
+
+After finding a significant overall effect, posthoc pairwise comparisons were performed to identify the specific income groups with significantly different mean poor mental health days.
+
+```{r}
+library(emmeans)
+adj_means <- emmeans(model, ~ INCOMG1)
+
+adj_means 
+
+pairs(adj_means, adjust = "bonferroni")
+```
+
+Estimated mean poor mental health days by income group:-
+
+Estimated Marginal Means (emmeans) were calculated to provide survey weighted predicted means for each group, adjusted for the complex sampling design. This ensures that the means are representative of the actual population proportions in the sampled 33 states/territories
+
+```{r}
+library(dplyr)
+library(emmeans)
+library(ggplot2)
+library(knitr)
+
+# Estimated marginal means
+adj_means <- emmeans(model, ~ INCOMG1)
+
+mean_table <- as.data.frame(adj_means) %>%
+  select(INCOMG1, emmean, SE, lower.CL, upper.CL) %>%
+  mutate(
+    emmean = round(emmean, 2),
+    SE = round(SE, 2),
+    lower.CL = round(lower.CL, 2),
+    upper.CL = round(upper.CL, 2)
+  )
+
+kable(
+  mean_table,
+  col.names = c("Income Group", "Estimated Mean", "SE", "Lower 95% CI", "Upper 95% CI"),
+  caption = "Table 1. Estimated mean number of poor mental health days by income group"
+)
+```
+
+
+```{r}
+# Pairwise comparisons with Bonferroni adjustment
+pairwise_table <- as.data.frame(pairs(adj_means, adjust = "bonferroni")) %>%
+  select(contrast, estimate, SE, df, p.value) %>%
+  mutate(
+    estimate = round(estimate, 2),
+    SE = round(SE, 2),
+    p.value = ifelse(p.value < 0.001, "<0.001", round(p.value, 3))
+  )
+
+kable(
+  pairwise_table,
+  col.names = c("Comparison(Income groups)", "Mean Difference", "SE", "df", "Adjusted p-value"),
+  caption = "Bonferroni-adjusted pairwise comparisons of income groups"
+)
+
+```
+
+
+Pairwise comparisons indicated that most income groups were significantly different from one another, with lower income groups generally reporting a higher mean number of poor mental health days than higher income groups. Only a few adjacent middle income categories did not differ significantly. Overall, the findings support a clear socioeconomic gradient in poor mental health days.
+
+
+```{r}
+library(ggplot2)
+
+plot_data <- as.data.frame(adj_means)
+
+p<- ggplot(plot_data, aes(x = INCOMG1, y = emmean, fill = INCOMG1)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+
+  scale_fill_brewer(palette = "Blues", direction = -1) + # Darker blue = Higher Income
+  labs(
+    title = "Estimated Mean Poor Mental Health Days by Income Group",
+    subtitle = "Lower-income groups report a higher mean number of poor mental health days",
+    x = "Income Category",
+    y = "Mean Poor Mental Health Days (95% CI)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1))
+print(p)
+ggsave("mean_income_plot.png", width = 8, height = 5, dpi = 300)
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+mean_table <- as.data.frame(adj_means) %>%
+  select(INCOMG1, emmean, lower.CL, upper.CL)
+
+ggplot(mean_table, aes(x = reorder(INCOMG1, -emmean), y = emmean)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+  coord_flip() +
+  labs(
+    title = "Estimated Mean Poor Mental Health Days by Income Group(95% CI)",
+    x = "Income Group",
+    y = "Estimated Mean Poor Mental Health Days"
+  ) +
+  theme_minimal()
+```
+
+The estimated mean number of poor mental health days decreased steadily as income increased. Adults in the lowest income group reported the highest mean number of poor mental health days, while those in the highest income group reported the lowest mean. The confidence intervals and pairwise comparisons further support this pattern, showing that most income groups differed significantly from one another. Overall, these findings indicate a clear negative association between income and poor mental health days among adults in the selected 33 states/territories in the United States.
+
+Along with this, we wanted to see the ODD ratio by applying ordinal regression on Mental health category
+
+
+```{r}
+# Ordered Logistic Regression
+ordered_model <- svyolr(MENTHLTH_CAT ~ INCOMG1, design = brfss_design)
+
+summary(ordered_model)
+
+```
+
+Odd ratios = exp(coefficient)
+
+```{r}
+library(dplyr)
+library(stringr)
+
+coef_table <- summary(ordered_model)$coefficients
+
+or_table_income <- data.frame(
+  Variable = rownames(coef_table),
+  Coefficient = coef_table[, "Value"],
+  SE = coef_table[, "Std. Error"],
+  t_value = coef_table[, "t value"]
+) %>%
+  filter(str_detect(Variable, "^INCOMG1")) %>%
+  mutate(
+    `Income Group` = c("$15-25k", "$25-35k", "$35-50k", "$50k-$100k", "$100k-$200k", ">$200k"),
+    OR = round(exp(Coefficient), 2),
+    `Change in Odds` = ifelse(
+      exp(Coefficient) < 1,
+      paste0(round((1 - exp(Coefficient)) * 100, 1), "% lower odds"),
+      paste0(round((exp(Coefficient) - 1) * 100, 1), "% higher odds")
+    ),
+    SE = round(SE, 3),
+    t_value = round(t_value, 2)
+  ) %>%
+  select(`Income Group`, OR, SE, t_value, `Change in Odds`)
+
+or_table_income
+```
+
+Compared with adults earning less than 15k, all higher income groups had lower odds of being in a worse mental health category. The odds decreased progressively as income increased. For example, adults earning 15k-25k had 19% lower odds of being in a worse mental health category, whereas those earning more than $200k had approximately 43% lower odds. Overall, these results indicate that higher income is associated with lower odds of more severe poor mental health.
+
+The relationship between income and mental health was examined using both a survey-weighted analysis of variance and an ordered logistic regression model. Both approaches consistently indicated that income is significantly associated with mental health outcomes.
+
+OR =1 :- meaning no difference 
+OR >1 :- more likely(higher odds) 
+OR <1 :- Less likely (lower odds)
+
+
+**AGE**
+
+The original 13 five-year age categories from the BRFSS dataset were collapsed into four broader life-stage groups (18-34, 35-49, 50-64, and 65+). Doing this improves the statistical power of the analysis and allows for a clearer interpretation of how mental health burden shifts across the lifespan.
+
+Null Hypothesis (H0):- The population mean of poor mental health days is equal across all four age groups.
+Alternative Hypothesis (H1) :- At least one age group has a population mean of poor mental health days that differs from the others.
+
+
+```{r}
+brfss1$AGE4 <- dplyr::case_when(
+  brfss1$AGEG5YR %in% c("18-24", "25-29", "30-34") ~ "18-34",
+  brfss1$AGEG5YR %in% c("35-39", "40-44", "45-49") ~ "35-49",
+  brfss1$AGEG5YR %in% c("50-54", "55-59", "60-64") ~ "50-64",
+  brfss1$AGEG5YR %in% c("65-69", "70-74", "75-79", "80+") ~ "65+"
+)
+```
+
+```{r}
+brfss1$AGE4 <- factor(brfss1$AGE4, levels = c("18-34", "35-49", "50-64", "65+"))
+```
+
+```{r}
+brfss_design <- update(brfss_design, AGE4 = brfss1$AGE4)
+```
+
+
+```{r}
+set.seed(1)
+
+groups <- levels(brfss1$AGE4)
+
+par(mfrow = c(2, 2))   
+
+for (g in groups) {
+  x <- subset(brfss1, AGE4 == g)$MENTHLTH
+  x <- x[!is.na(x)]
+  
+  sample_means <- replicate(1000, mean(sample(x, 500, replace = TRUE)))
+  
+  qqnorm(sample_means, main = paste("Q-Q Plot:", g))
+  qqline(sample_means)
+}
+```
+
+```{r}
+set.seed(1)
+
+groups <- levels(brfss1$AGE4)
+
+par(mfrow = c(2, 2))
+
+for (g in groups) {
+  x <- subset(brfss1, AGE4 == g)$MENTHLTH
+  x <- x[!is.na(x)]
+  
+  sample_means <- replicate(1000, mean(sample(x, 500, replace = TRUE)))
+  
+  hist(sample_means,
+       main = paste("Sampling Distribution:", g),
+       xlab = "Sample mean")
+}
+
+
+```
+
+To assess the applicability of the Central Limit Theorem, a resampling procedure was performed within each age group. Repeated samples of size 500 were drawn, and Q-Q plots of the resulting sample means showed that the sampling distributions were approximately normal across all age groups.
+
+
+To evaluate the relationship between age and mental health, a design-based One-Way ANOVA was performed using a Wald test.
+
+```{r}
+age4_model <- svyglm(MENTHLTH ~ AGE4, design = brfss_design)
+
+
+
+regTermTest(age4_model, ~ AGE4)
+```
+
+The survey weighted Wald test showed a significant overall effect of age group on mean poor mental health days (F=502.72,p<0.001). This indicates that at least one age group has a different mean number of poor mental health days.
+
+
+Because the overall age group effect was statistically significant, post hoc pairwise comparisons were conducted to determine which age groups differed significantly in their mean number of poor mental health days.
+
+```{r}
+library(emmeans)
+
+age4_emm <- emmeans(age4_model, ~ AGE4)
+age4_emm
+pairs(age4_emm, adjust = "bonferroni")
+
+```
+
+
+Post hoc pairwise comparisons using Bonferroni adjustment indicated that every age category differed significantly from every other age category (p<0.001). Compared with adults aged 35-49, those aged 18-34 reported, on average, 1.16 more poor mental health days. Compared with those aged 50-64 and 65+, the 18-34 group reported 2.09 and 3.75 more poor mental health days, respectively. Similarly, the 35-49 and 50-64 groups each had significantly higher mean poor mental health days than the 65+ group. Overall, the findings suggest that mean poor mental health days decline progressively with age.
+
+
+```{r}
+library(ggplot2)
+
+age_means_df <- as.data.frame(age4_emm)
+
+q<-ggplot(age_means_df, aes(x = AGE4, y = emmean)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+  labs(
+    x = "Age Group",
+    y = "Adjusted mean poor mental health days",
+    title = "Adjusted Mean Poor Mental Health Days by Age Group",
+    subtitle = "Survey-weighted estimated marginal means with 95% confidence intervals"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+print(q)
+ggsave("mean_age_plot.png", width = 8, height = 5, dpi = 300)
+
+```
+
+The estimated marginal means show a clear decreasing trend, where younger adults (1834 years) report the highest number of poor mental health days, while older adults (65+ years) report substantially fewer poor mental health days.
+
+
+```{r}
+library(emmeans)
+library(dplyr)
+library(knitr)
+
+# Pairwise comparisons
+age_pairs <- pairs(age4_emm, adjust = "bonferroni")
+
+age_pairs_df <- as.data.frame(age_pairs)
+
+
+age_pairs_table <- age_pairs_df %>%
+  mutate(
+    estimate = round(estimate, 3),
+    SE = round(SE, 3),
+    t.ratio = round(t.ratio, 3),
+    p.value = format.pval(p.value, digits = 3, eps = .001)
+  ) %>%
+  select(contrast, estimate, SE, df, t.ratio, p.value)
+
+kable(
+  age_pairs_table,
+  caption = "Bonferroni-Adjusted Pairwise Comparisons of Adjusted Mean Poor Mental Health Days by Age Group",
+  col.names = c("Age Group Comparison", "Mean Difference", "SE", "df", "t Ratio", "p-value"),
+  align = "lccccc"
+)
+
+```
+
+```{r}
+age_pairs
+```
+
+```{r}
+age_pairs_ci <- confint(age_pairs)
+
+age_pairs_ci_df <- as.data.frame(age_pairs_ci)
+```
+
+```{r}
+sig_age_pairs_table_ci <- age_pairs_df %>%
+  mutate(
+    lower.CL = age_pairs_ci_df$lower.CL,
+    upper.CL = age_pairs_ci_df$upper.CL
+  ) %>%
+  filter(p.value < 0.05) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    SE = round(SE, 3),
+    lower.CL = round(lower.CL, 3),
+    upper.CL = round(upper.CL, 3),
+    t.ratio = round(t.ratio, 3),
+    p.value = format.pval(p.value, digits = 3, eps = .001)
+  ) %>%
+  select(contrast, estimate, SE, df, lower.CL, upper.CL, t.ratio, p.value)
+
+kable(
+  sig_age_pairs_table_ci,
+  caption = "Significant Bonferroni-Adjusted Pairwise Comparisons of Adjusted Mean Poor Mental Health Days by Age Group",
+  col.names = c("Comparison", "Mean Difference", "SE", "df", "CI Lower", "CI Upper", "t Ratio", "p-value"),
+  align = "lccccccc"
+)
+```
+
+
+```{r message=FALSE}
+library(ggplot2)
+library(dplyr)
+
+plot_df <- sig_age_pairs_table_ci %>%
+  filter(grepl("^\\(18-34\\)", contrast) | grepl("^18-34", contrast))
+
+ggplot(plot_df, aes(x = estimate, y = reorder(contrast, estimate))) +
+  geom_point(size = 3) +
+  geom_errorbarh(aes(xmin = `lower.CL`, xmax = `upper.CL`), height = 0.2) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  labs(
+    x = "Difference in adjusted mean poor mental health days",
+    y = "Comparison",
+    title = "Adjusted Mean Differences: Age 18-24 vs Other Age Groups",
+    subtitle = "Bonferroni-adjusted 95% confidence intervals"
+  ) +
+  theme_minimal()
+```
+
+The pairwise comparison plot shows that individuals aged 18-34 report significantly more poor mental health days compared to all other age groups. All estimated differences are positive and their confidence intervals do not include zero, indicating statistically significant differences. Furthermore, the magnitude of the difference increases with age, with the largest gap observed between the youngest and
+oldest age groups. This suggests a strong age-related gradient in mental health outcomes.
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+ggplot(
+  brfss1 %>% filter(!is.na(AGE4), !is.na(SDLONELY)),
+  aes(x = AGE4, fill = SDLONELY)
+) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    x = "Age Group",
+    y = "Proportion",
+    fill = "Loneliness",
+    title = "Distribution of Loneliness by Age Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+To further investigate the relative risk across age groups, a survey-weighted ordinal logistic regression was performed. The model used 'Mental Health Category' as an ordinal dependent variable (Resilient, Low/Moderate, Frequent, Chronic).
+
+```{r}
+#Ordered Logistic Regression
+ordered_model_age <- svyolr(MENTHLTH_CAT ~ AGE4, design = brfss_design)
+
+summary(ordered_model_age)
+
+```
+```{r}
+coef_table_age <- coef(summary(ordered_model_age))
+```
+
+```{r}
+or_table_age <- data.frame(
+  Variable = rownames(coef_table_age),
+  Coefficient = coef_table_age[, "Value"],
+  SE = coef_table_age[, "Std. Error"],
+  t_value = coef_table_age[, "t value"]
+) %>%
+  filter(str_detect(Variable, "^AGE4")) %>%
+  mutate(
+    `Age Group` = str_remove(Variable, "^AGE4"),
+    OR = round(exp(Coefficient), 2),
+    p_raw = 2 * pnorm(abs(t_value), lower.tail = FALSE),
+    p_adj = pmin(p_raw * 3, 1), 
+    `P Value Adj` = format.pval(p_adj, eps = .001, digits = 3),
+    `Change in Odds` = ifelse(
+      exp(Coefficient) < 1,
+      paste0(round((1 - exp(Coefficient)) * 100, 1), "% lower odds"),
+      paste0(round((exp(Coefficient) - 1) * 100, 1), "% higher odds")
+    ),
+    SE = round(SE, 3),
+    t_value = round(t_value, 2)
+  ) %>%
+  select(`Age Group`, OR, SE, t_value, `P Value Adj`, `Change in Odds`)
+
+or_table_age
+
+```
+
+```{r}
+or_table_age
+```
+
+```{r}
+library(dplyr)
+library(knitr)
+
+or_table_age %>%
+  mutate(
+    OR = round(OR, 2),
+    SE = round(SE, 3),
+    t_value = round(t_value, 2)
+  ) %>%
+  kable(
+    caption = "Odds Ratios for Mental Health Severity by Age Group",
+    col.names = c("Age Group", "OR", "SE", "t value", "Adjusted p-value", "Change in Odds"),
+    align = "lccccc"
+  )
+
+```
+
+
+Using adults aged 18-34 as the reference group, the odds of being in a worse mental health category decreased with age. Adults aged 35-49 had 28.9% lower odds, those aged 50-64 had 50.4% lower odds, and those aged 65+ had 73.9% lower odds of worse mental health compared with adults aged 18-34.
+
+
+**SMOKER3**
+
+Null Hypothesis (H0): There is no difference in the mean number of poor mental health days across the four smoking categories in the population.
+
+Alternative Hypothesis (H1): At least one smoking category has a significantly different mean number of poor mental health days compared to the others.
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+ggplot(
+  brfss1 %>% filter(!is.na(INCOMG1), !is.na(SMOKER3)),
+  aes(x = INCOMG1, fill = SMOKER3)
+) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    x = "Income Group",
+    y = "Proportion",
+    fill = "SMOKER3",
+    title = "Distribution of smoking habit  by Income Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+```{r}
+set.seed(1)
+
+groups <- levels(brfss1$SMOKER3)
+
+par(mfrow = c(2, 2))  
+
+for (g in groups) {
+  x <- subset(brfss1, SMOKER3 == g)$MENTHLTH
+  x <- x[!is.na(x)]
+  
+  sample_means <- replicate(1000, mean(sample(x, 500, replace = TRUE)))
+  
+  qqnorm(sample_means, main = paste("Q-Q Plot:", g))
+  qqline(sample_means)
+}
+```
+
+To validate the applicability of the Central Limit Theorem (CLT), a resampling approach was conducted for each smoking category. Repeated samples were drawn, and the distribution of sample means was examined using both histograms and Q-Q plots. Across all groups, the sampling distributions were approximately symmetric and bell-shaped, and the Q-Q plots closely followed a straight line, indicating approximate normality. These results confirm that, despite the skewness in the original data and residuals, the sampling distribution of the mean is approximately normal. Therefore, the assumptions required for ANOVA-based inference are reasonably satisfied.
+
+```{r}
+set.seed(1)
+
+sample_sizes <- c(20, 50, 100, 200, 500, 1000)
+groups <- levels(brfss1$SMOKER3)
+
+results <- data.frame()
+
+for (g in groups) {
+  x <- brfss1$MENTHLTH[brfss1$SMOKER3 == g]
+  x <- x[!is.na(x)]
+  
+  se_vals <- sapply(sample_sizes, function(n) {
+    sample_means <- replicate(1000, mean(sample(x, n, replace = TRUE)))
+    sd(sample_means)
+  })
+  
+  temp <- data.frame(
+    sample_size = sample_sizes,
+    sd_of_sample_means = se_vals,
+    group = g
+  )
+  
+  results <- rbind(results, temp)
+}
+
+ggplot(results, aes(x = sample_size, y = sd_of_sample_means, color = group)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Standard Deviation of Sample Means by Sample Size Across Smoking Groups",
+    x = "Sample Size",
+    y = "Standard Deviation of Sample Means",
+    color = "Smoking Group"
+  ) +
+  theme_minimal()
+```
+
+To further illustrate the Central Limit Theorem, the standard deviation of the resampled sample means was plotted against increasing sample size. The plot showed that the variability of the sample mean decreased as sample size increased, consistent with the relationship This supports the idea that larger samples produce more stable mean estimates and strengthens the justification for ANOVA-based inference.
+
+```{r}
+model_smoking <- svyglm(MENTHLTH ~ SMOKER3, design = brfss_design)
+
+regTermTest(model_smoking, "SMOKER3")
+
+```
+
+A survey-weighted Wald test revealed a highly significant relationship between smoking and poor mental health days(F=178.0263, P<0.001). We can reject Ho, this confirms that the number of poor mental health days is not equal across smoking habits, allowing for further post hoc analysis of specific group differences.
+
+```{r}
+library(emmeans)
+
+smoke_emm <- emmeans(model_smoking, ~ SMOKER3)
+smoke_emm
+pairs(smoke_emm, adjust = "bonferroni")
+
+```
+
+Post-hoc pairwise comparisons using Bonferroni adjustment revealed significant differences between all smoking categories . A clear relationship was observed: everyday smokers reported the highest mean number of poor mental health days (M = 8.11, 95% CI [7.75, 8.47]), which was significantly higher than someday smokers (M = 6.77), former smokers (M = 5.20), and never-smokers (M = 4.26).
+
+t.ratio = estimate / SE
+Estimate: The actual difference in days (e.g., Never smoked minus Everyday smoker = -3.84).
+SE (Standard Error): The "noise" or uncertainty in the survey data (0.19).
+Result: 
+A t.ratio far away from zero (either positive or negative) means the "signal" is much stronger than the "noise."
+
+The disparity in mental health between non-smokers and everyday smokers was highly pronounced (t = -20.17), representing the strongest contrast among all smoking categories.
+Post-hoc pairwise comparisons using Bonferroni adjustment revealed statistically significant differences between all smoking groups (p < 0.0001). Everyday smokers had the highest mean number of poor mental health days, followed by someday smokers, former smokers, and never smokers.
+
+```{r}
+library(ggplot2)
+
+
+plot_data_smoke <- as.data.frame(smoke_emm)
+
+
+c<-ggplot(plot_data_smoke, aes(x = SMOKER3, y = emmean, fill = SMOKER3)) +
+  geom_bar(stat = "identity", alpha = 0.8, color = "white") +
+
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2, size = 0.8) +
+
+  scale_fill_brewer(palette = "OrRd", direction = 1) + 
+  labs(
+    title = "Smoking Frequency and Mental Health Distress",
+    subtitle = "Increased smoking frequency is associated with higher mean poor mental health days",
+    x = "Smoking Frequency",
+    y = "Mean Poor Mental Health Days (95% CI)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    plot.title = element_text(face = "bold", size = 14)
+  )
+
+print(c)
+ggsave("mean_smoking_plot.png", width = 8, height = 5, dpi = 300)
+
+```
+
+The error bars represent the 95% confidence intervals for the weighted mean of poor mental health days. The lack of overlap between the confidence intervals across all four smoking categories provides visual evidence of the highly significant differences (p<0.001) found in our pairwise comparisons.
+
+
+
+```{r}
+library(emmeans)
+library(dplyr)
+library(knitr)
+
+# Pairwise comparisons
+smoker_pairs <- pairs(smoke_emm, adjust = "bonferroni")
+
+smoker_pairs_df <- as.data.frame(smoker_pairs)
+
+age_pairs_table <- smoker_pairs_df %>%
+  mutate(
+    estimate = round(estimate, 3),
+    SE = round(SE, 3),
+    t.ratio = round(t.ratio, 3),
+    p.value = format.pval(p.value, digits = 3, eps = .001)
+  ) %>%
+  select(contrast, estimate, SE, df, t.ratio, p.value)
+
+kable(
+  age_pairs_table,
+  caption = "Bonferroni-Adjusted Pairwise Comparisons of Adjusted Mean Poor Mental Health Days by Smoking Category",
+  col.names = c("Comparison", "Mean Difference", "SE", "df", "t Ratio", "p-value"),
+  align = "lccccc"
+)
+
+```
+
+```{r}
+smoker_pairs_ci <- confint(smoker_pairs)
+
+smoker_pairs_ci_df <- as.data.frame(smoker_pairs_ci)
+```
+
+```{r}
+sig_smoke_pairs_table_ci <- smoker_pairs_df %>%
+  mutate(
+    lower.CL = smoker_pairs_ci_df$lower.CL,
+    upper.CL = smoker_pairs_ci_df$upper.CL
+  ) %>%
+  filter(p.value < 0.05) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    SE = round(SE, 3),
+    lower.CL = round(lower.CL, 3),
+    upper.CL = round(upper.CL, 3),
+    t.ratio = round(t.ratio, 3),
+    p.value = format.pval(p.value, digits = 3, eps = .001)
+  ) %>%
+  select(contrast, estimate, SE, df, lower.CL, upper.CL, t.ratio, p.value)
+
+kable(
+  sig_smoke_pairs_table_ci,
+  caption = "Significant Bonferroni-Adjusted Pairwise Comparisons of Adjusted Mean Poor Mental Health Days by Smoking Category",
+  col.names = c("Comparison", "Mean Difference", "SE", "df", "CI Lower", "CI Upper", "t Ratio", "p-value"),
+  align = "lccccccc"
+)
+```
+
+
+Bonferroni adjusted pairwise comparisons show that individuals who smokes everyday report significantly more poor mental health days compared to all other individuals who does not smoke. The differences increase with age, with the largest gap observed between never smoked and everyday smoker.
+
+```{r message=FALSE}
+library(ggplot2)
+library(dplyr)
+
+plot_df_smoke <- sig_smoke_pairs_table_ci 
+
+a <- ggplot(plot_df_smoke, aes(x = estimate, y = reorder(contrast, estimate))) +
+  geom_point(size = 3) +
+  geom_errorbarh(aes(xmin = `lower.CL`, xmax = `upper.CL`), height = 0.2) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  labs(
+    x = "Difference in adjusted mean poor mental health days",
+    y = "Comparison",
+    title = "Adjusted Mean Differences(Smoking Frequency)",
+    subtitle = "Bonferroni-adjusted 95% confidence intervals"
+  ) +
+  theme_minimal()
+print(a)
+ggsave("posthoc_smoking_plot.png", width = 8, height = 5, dpi = 300)
+```
+
+All pairwise comparisons were statistically significant (Bonferroni adjusted), with the greatest disparity observed between everyday smokers and those who have never smoked.In our analysis, we didn't just do one test; we compared 6 different pairs of smoking groups. 
+The weighted Wald test indicated a highly significant association between smoking frequency and reported poor mental health days
+Post-hoc comparisons using the Bonferroni adjustment revealed that all pairwise differences between smoking groups were statistically significant (p<0.001). Specifically, 'Everyday smokers' reported the highest mean number of poor mental health days , which was significantly higher than 'Someday smokers','Former smokers' and 'Never smokers'.As shown in the adjusted mean difference plot, the largest disparity was observed between everyday smokers and never-smokers, with the former experiencing nearly four additional days of poor mental health per month."
+
+To complement the analysis of mean differences, we also conducted an ordinal logistic regression to examine the odds of falling into higher categories of poor mental health. This allowed us to assess whether smoking status predicts not just the average number of days, but the severity of mental health distress."
+
+```{r}
+# Ordinal Model for Smoking
+smoke_ordinal_model <- svyolr(MENTHLTH_CAT ~ SMOKER3, design = brfss_design)
+
+# Odds Ratios 
+exp(coef(smoke_ordinal_model))
+
+summary(smoke_ordinal_model)
+
+```
+
+
+```{r}
+library(dplyr)
+library(stringr)
+
+coeffs <- summary(smoke_ordinal_model)$coefficients
+
+smoker_results <- coeffs[str_detect(rownames(coeffs), "^SMOKER3"), , drop = FALSE]
+
+OR <- exp(smoker_results[, "Value"])
+CI <- cbind(
+  exp(smoker_results[, "Value"] - 1.96 * smoker_results[, "Std. Error"]),
+  exp(smoker_results[, "Value"] + 1.96 * smoker_results[, "Std. Error"])
+)
+
+raw_p_val <- 2 * pnorm(abs(smoker_results[, "t value"]), lower.tail = FALSE)
+adj_p_val <- pmin(raw_p_val * 3, 1)
+
+final_table <- data.frame(
+  Smoking_Status = str_remove(rownames(smoker_results), "^SMOKER3"),
+  Odds_Ratio = round(OR, 2),
+  Lower_95_CI = round(CI[, 1], 2),
+  Upper_95_CI = round(CI[, 2], 2),
+  P_Value_Adj = format.pval(adj_p_val, eps = .001, digits = 3)
+)
+
+print(final_table)
+```
+```{r}
+rownames(final_table) <- NULL
+
+kable(
+  final_table,
+  caption = "Odds Ratios for Mental Health Severity by Smoking frequency(Never Smoker reference)",
+  col.names = c("Smoking Status", "Odds Ratio", "Lower 95% CI", "Upper 95% CI", "Adjusted p-value"),
+  align = "lcccc"
+)
+
+```
+
+An ordinal logistic regression model was conducted to examine the association between smoking status and the severity of poor mental health days . Using 'Never Smokers' as the reference group, a significant dose response relationship was observed. Everyday smokers showed the highest risk, with 1.77 times higher odds (95% CI [1.64, 1.90], Padj <0.001) of falling into a more severe mental health category. Someday smokers also exhibited significantly increased odds (OR = 1.60, 95% CI [1.46, 1.76], Padj<0.001). Notably, even former smokers maintained a small but statistically significant increase in risk (OR = 1.06, 95% CI [1.01, 1.11], 0.0384), even after applying for Bonferroni adjustment for multiple comparisons.
+
+
+**SEX**
+
+Null Hypothesis (H0):- 
+The mean number of poor mental health days (MENTHLTH) is the same for females and males.
+
+Alternative Hypothesis(H1):-
+The mean number of poor mental health days (MENTHLTH) is higher for females than for males.
+
+A significance level of alpha = 0.05 is used.
+
+```{r}
+levels(brfss1$SEX)
+brfss1$SEX <- relevel(brfss1$SEX, ref = "Male")
+levels(brfss1$SEX)
+```
+```{r}
+library(survey)
+
+
+brfss_design <- svydesign(
+  id = ~1,               
+  weights = ~ LLCPWT,   
+  data = brfss1           
+)
+```
+
+
+```{r gender-mean-test-clean, message=FALSE, warning=FALSE}
+set.seed(1)
+library(survey)
+library(dplyr)
+library(knitr)
+
+
+# Weighted means by sex
+sex_mean <- svyby(~MENTHLTH, ~SEX, brfss_design, svymean, na.rm = TRUE)
+
+# Confidence intervals
+sex_mean_ci <- confint(sex_mean)
+
+sex_results <- data.frame(
+  Sex = as.character(sex_mean$SEX),
+  Weighted_Mean = round(sex_mean$MENTHLTH, 2),
+  Standard_Error = round(sex_mean$se, 3),
+  CI_Lower = round(sex_mean_ci[, 1], 2),
+  CI_Upper = round(sex_mean_ci[, 2], 2)
+)
+
+kable(
+  sex_results,
+  caption = "Weighted Mean Number of Poor Mental Health Days by Sex",
+  col.names = c("Sex", "Weighted Mean", "Standard Error", "CI Lower", "CI Upper"),
+  align = "c"
+)
+
+# Survey-weighted t-test
+sex_ttest <- svyttest(MENTHLTH ~ SEX, brfss_design,alternative="less")
+
+ttest_results <- data.frame(
+  t_Statistic = round(as.numeric(sex_ttest$statistic), 3),
+  Degrees_of_Freedom = round(as.numeric(sex_ttest$parameter), 0),
+  p_value = format.pval(as.numeric(sex_ttest$p.value), digits = 3, eps = .001),
+  Mean_Difference = round(as.numeric(sex_ttest$estimate), 3),
+  CI_Lower = round(sex_ttest$conf.int[1], 3),
+  CI_Upper = round(sex_ttest$conf.int[2], 3)
+)
+
+kable(
+  ttest_results,
+  caption = "Survey-Weighted t-Test Comparing Mean Poor Mental Health Days by Sex",
+  col.names = c("t Statistic", "Degrees of Freedom", "p-value", "Mean Difference", "CI Lower", "CI Upper"),
+  align = "c"
+)
+```
+
+A survey weighted independent samples t-test was conducted to compare the mean number of poor mental health days between biological sexes. The analysis revealed a significant disparity (t(221800) = 16.76, p < 0.001), with females reporting an average of 1.362 more days of distress per month than males (95 %  CI  [1.203, 1.522]). These results provide  evidence to reject the null hypothesis and support the alternative hypothesis that females experience a significantly higher average burden of poor mental health in the U.S. adult population.
+The Standard Error shows the precision of our estimate. It tells us how much the mean would likely vary if we drew a different sample of the same size from the population.
+
+```{r}
+ggplot(sex_results, aes(x = Sex, y = Weighted_Mean, fill = Sex)) +
+  geom_col(width = 0.5, color = "black", show.legend = FALSE) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+                width = 0.1, size = 0.8, color = "black") +
+ 
+  geom_text(aes(label = Weighted_Mean), vjust = -1.5, fontface = "bold", size = 5) +
+  
+  expand_limits(y = 7) + 
+  theme_minimal(base_size = 14) +
+  scale_fill_manual(values = c("Male" = "#5DADE2", "Female" = "#EC7063")) +
+  labs(
+    title = "Average Poor Mental Health Days by Sex",
+    subtitle = "Error bars represent the 95% Confidence Interval (Weighted)",
+    x = "Biological Sex",
+    y = "Mean Days in Past 30 Days"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", margin = margin(b = 10)),
+    panel.grid.major.x = element_blank()
+  )
+```
+```{r}
+library(ggplot2)
+
+f<- ggplot(sex_results, aes(x = Sex, y = Weighted_Mean, color = Sex)) +
+ 
+  geom_point(size = 5) +
+  
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+                width = 0.2, size = 1.2) +
+
+  geom_text(aes(label = Weighted_Mean), 
+            hjust = -0.7, fontface = "bold", size = 5) +
+  
+  theme_bw(base_size = 15) +
+  scale_color_manual(values = c("Male" = "#2E86C1", "Female" = "#CB4335")) +
+  expand_limits(y = c(3.5, 6.5)) + 
+  labs(
+    title = "Confidence Interval Overlap: Mental Health by Sex",
+    subtitle = "95% CIs do not overlap, indicating a significant population difference",
+    x = "Biological Sex",
+    y = "Mean Poor Mental Health Days"
+  ) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+print(f)
+ggsave("mean_sex_plot.png", width = 8, height = 5, dpi = 300)
+
+```
+
+The visual analysis of 95% Confidence Intervals further reinforces the t test results. The lack of any overlap between the female (5.51 days) and male (4.14 days) intervals provides clear evidence of a significant population level disparity. Furthermore, the narrow width of the error bars indicates high precision in our estimates, confirming that females experience a consistently higher burden of poor mental health across the U.S. adult population.
+
+
+To further see the results, we performed **chi square test** to see the association between mental health Category and Sex
+
+Null Hypothesis (H0): Mental health categories are independent of biological sex. (The distribution across Resilient, Low, Frequent, and Chronic is proportionally the same for men and women).
+Alternative Hypothesis (H1): Mental health categories are associated with biological sex. (Women are disproportionately represented in higher-distress categories).
+
+
+```{r}
+#survey-weighted Chi-Square test
+sex_cat_chisq <- svychisq(~MENTHLTH_CAT + SEX, design = brfss_design)
+print(sex_cat_chisq)
+```
+
+A survey-weighted Chi-Square test showed a significant association between sex and mental health category. So we rejected H0
+
+```{r}
+sex_cat_props <- svyby(~MENTHLTH_CAT, ~SEX, brfss_design, svymean, na.rm = TRUE)
+print(sex_cat_props)
+
+```
+
+```{r}
+sex_table_final <- as.data.frame(sex_cat_props)
+
+colnames(sex_table_final) <- c(
+  "Sex", 
+  "Resilient (0 days)", "Low/Mod (1-13 days)", 
+  "Frequent (14-29 days)", "Chronic (30 days)",
+  "SE_Resilient", "SE_LowMod", "SE_Frequent", "SE_Chronic"
+)
+
+sex_table_final[, 2:5] <- round(sex_table_final[, 2:5] * 100, 1)
+
+sex_table_final[, 6:9] <- round(sex_table_final[, 6:9], 4)
+
+library(knitr)
+kable(
+  sex_table_final[, 1:5], 
+  caption = "Distribution of Mental Health Severity by Sex (Weighted Percentages)",
+  align = "c",
+  row.names = FALSE
+)
+```
+
+
+```{r}
+categories <- c("1-13: Low/Moderate", "14-29: Frequent", "30: Chronic")
+```
+
+```{r}
+for (cat in categories) {
+ 
+  sub_design <- subset(brfss_design, MENTHLTH_CAT %in% c("0: Resilient", cat))
+  
+ 
+  sub_design <- update(sub_design, is_target = (MENTHLTH_CAT == cat))
+  
+  model <- svyglm(is_target ~ SEX, design = sub_design, family = quasibinomial)
+  
+  print(paste("Likelihood for", cat, "vs Resilient:"))
+  print(exp(coef(model))["SEXFemale"])
+}
+
+```
+
+```{r}
+
+gender_risk_table <- data.frame(
+  Distress_Category = c("Low/Moderate (1-13 days)", "Frequent (14-29 days)", "Chronic (30 days)"),
+  Odds_Ratio = c(1.47, 1.72, 1.58)
+)
+
+gender_risk_table$Risk_Increase <- paste0((gender_risk_table$Odds_Ratio - 1) * 100, "% higher odds")
+
+print(gender_risk_table)
+```
+
+1.47 (Low/Moderate): Compared to being "Resilient," females have 1.47 times the odds (or are 47% more likely) of being in the Low/Moderate group than males.
+1.71 (Frequent): Females have 1.71 times the odds (or are 71% more likely) of experiencing Frequent distress than being Resilient, compared to males.
+1.58 (Chronic): Females have 1.58 times the odds (or are 58% more likely) of experiencing Chronic distress than being Resilient, compared to males.
+
+
+**Physical Activity**
+
+Null Hypothesis (H0):-
+The mean number of poor mental health days for those who engage in physical activity is greater than or equal to those who do not.
+
+Alternative Hypothesis(H1):- The mean number of poor mental health days for those who engage in physical activity is significantly lower than those who do not.
+
+
+A significance level of alpha = 0.05 is used, and a directional  survey weighted t test is conducted.
+
+
+Although the distribution of poor mental health days was right-skewed, a survey-weighted t-test was used to compare group means. Given the large sample size, the Central Limit Theorem ensures that the sampling distribution of the mean is approximately normal. This assumption was further supported by resampling analysis, which showed that the distribution of sample means was approximately normal. Therefore, the use of the weighted t-test is appropriate.
+
+
+```{r}
+no_data  <- brfss1 %>% filter(EXERANY2 == "No") %>% pull(MENTHLTH)
+yes_data <- brfss1 %>% filter(EXERANY2 == "Yes") %>% pull(MENTHLTH)
+
+```
+
+
+```{r}
+sample_means <- function(data, n = 1000, size = 500) {
+  replicate(n, mean(sample(data, size, replace = TRUE), na.rm = TRUE))
+}
+```
+
+
+```{r}
+no_means  <- sample_means(no_data)
+yes_means <- sample_means(yes_data)
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+qqnorm(no_means, main = "QQ Plot - No Activity")
+qqline(no_means)
+
+qqnorm(yes_means, main = "QQ Plot - Yes Activity")
+qqline(yes_means)
+```
+```{r}
+par(mfrow = c(1,2))
+
+hist(no_means, main = "No Activity", xlab = "Sample Mean")
+
+hist(yes_means, main = "Yes Activity", xlab = "Sample Mean")
+```
+
+To visually confirm the normality of the sampling distribution, we generated histograms of the simulated sample means (Figure X). Both the 'No Activity' and 'Yes Activity' groups produced symmetrical, bell-shaped distributions. This visual evidence, combined with the earlier QQ plots, provides a high degree of confidence that the Central Limit Theorem is satisfied, ensuring the validity of our survey-weighted t-test."
+
+
+```{r physical-activity-mean-test, message=FALSE, warning=FALSE}
+
+set.seed(1)
+
+library(survey)
+
+library(dplyr)
+
+library(knitr)
+ 
+
+brfss1$EXERANY2 <- factor(brfss1$EXERANY2, levels = c("No", "Yes")) 
+
+brfss1$MENTHLTH <- as.numeric(brfss1$MENTHLTH)
+
+ 
+
+activity_mean <- svyby(~MENTHLTH, ~EXERANY2, brfss_design, svymean, na.rm = TRUE)
+ 
+# Confidence intervals
+
+activity_mean_ci <- confint(activity_mean)
+ 
+
+activity_results <- data.frame(
+
+  Physical_Activity = as.character(activity_mean$EXERANY2),
+
+  Weighted_Mean = round(activity_mean$MENTHLTH, 2),
+
+  Standard_Error = round(activity_mean$se, 3),
+
+  CI_Lower = round(activity_mean_ci[, 1], 2),
+
+  CI_Upper = round(activity_mean_ci[, 2], 2)
+
+)
+ 
+
+kable(
+
+  activity_results,
+
+  caption = "Weighted Mean Number of Poor Mental Health Days by Physical Activity",
+
+  col.names = c("Physical Activity", "Weighted Mean", "Standard Error", "CI Lower", "CI Upper"),
+
+  align = "c"
+
+)
+ 
+# Directed t-test
+
+activity_ttest <- svyttest(MENTHLTH ~ EXERANY2, brfss_design,alternative = "greater")
+ 
+
+
+ttest_results <- data.frame(
+
+  t_Statistic = round(as.numeric(activity_ttest$statistic), 3),
+
+  Degrees_of_Freedom = round(as.numeric(activity_ttest$parameter), 0),
+
+  p_value = format.pval(as.numeric(activity_ttest$p.value), digits = 3, eps = .001),
+
+  Mean_Difference = round(as.numeric(activity_ttest$estimate), 3),
+
+  CI_Lower = round(activity_ttest$conf.int[1], 3),
+
+  CI_Upper = round(activity_ttest$conf.int[2], 3)
+
+)
+ 
+
+
+kable(
+
+  ttest_results,
+
+  caption = "Directed Survey-Weighted t-Test:if Physically Inactive Adults report more Poor Mental Health Days",
+
+  col.names = c("t Statistic", "Degrees of Freedom", "p-value", "Mean Difference", "CI Lower", "CI Upper"),
+
+  align = "c",
+  row.names = FALSE
+
+)
+
+```
+
+
+Since the p-value is less than 0.05, we reject the null hypothesis and conclude that mean poor mental health days is more among the individual who are not physically active. Physical activity is associated with fewer poor mental health days in the U.S. adult population.
+
+Physically active individuals had significantly fewer poor mental health days than physically inactive individuals, with a mean difference of 1.77 days. Equivalently, the weighted mean difference for active versus inactive individuals was -1.77 days (95% CI: -1.99 to -1.55, p < 0.001).
+
+
+```{r}
+g<- ggplot(activity_results, aes(x = Physical_Activity, y = Weighted_Mean, fill = Physical_Activity)) +
+  geom_col(width = 0.5, color = "black", show.legend = FALSE) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+                width = 0.1, size = 0.8, color = "black") +
+
+  geom_text(aes(label = Weighted_Mean), vjust = -1.5, fontface = "bold", size = 5) +
+ 
+  expand_limits(y = 7) + 
+  theme_minimal(base_size = 14) +
+  scale_fill_manual(values = c("Yes" = "#5DADE2", "No" = "#EC7063")) +
+  labs(
+    title = "Average Poor Mental Health Days by Physical Activity",
+    subtitle = "Error bars represent the 95% Confidence Interval (Weighted)",
+    x = "Physical activity",
+    y = "Mean Poor mental health Days"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", margin = margin(b = 10)),
+    panel.grid.major.x = element_blank()
+  )
+print(g)
+ggsave("mean_physicalactivity_plot.png", width = 8, height = 5, dpi = 300)
+
+```
+
+```{r fig.width=10}
+library(ggplot2)
+
+ggplot(activity_results, aes(x = Physical_Activity, y = Weighted_Mean, color = Physical_Activity)) +
+ 
+  geom_point(size = 5) +
+  
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), 
+                width = 0.2, size = 1.2) +
+ 
+  geom_text(aes(label = Weighted_Mean), 
+            hjust = -0.7, fontface = "bold", size = 5) +
+ 
+  theme_bw(base_size = 15) +
+  scale_color_manual(values = c("Yes" = "#2E86C1", "No" = "#CB4335")) +
+  expand_limits(y = c(3.5, 6.5)) + 
+  labs(
+    title = "Confidence Interval Overlap: Mental Health by Physical Activity",
+    subtitle = "95% CIs do not overlap, indicating a significant population difference",
+    x = "Physical Activity",
+    y = "Mean Poor Mental Health Days"
+  )+
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+Null Hypothesis : There is no association between physical activity and the severity of mental health distress, after adjusting for age.
+
+Alternative Hypothesis : Engaging in physical activity is significantly associated with lower odds of being in a more severe mental health category,independent of age.
+
+```{r}
+
+brfss_design$variables$EXERANY2 <- factor(brfss_design$variables$EXERANY2, levels = c("No", "Yes"))
+
+exer_ordinal_model <- svyolr(MENTHLTH_CAT ~ EXERANY2 + AGE4, design = brfss_design)
+
+summary_exer <- summary(exer_ordinal_model)
+exer_OR <- exp(coef(exer_ordinal_model)) 
+exer_CI <- exp(confint(exer_ordinal_model)) 
+
+print(exer_OR)
+
+```
+```{r}
+exer_coefs <- as.data.frame(coef(summary(exer_ordinal_model)))
+
+exer_coefs$OR <- exp(exer_coefs$Value)
+
+exer_final_table <- exer_coefs %>%
+  filter(row_number() <= 4) %>% 
+  mutate(
+    `Odds Ratio` = round(OR, 2),
+    `t value` = round(`t value`, 2),
+  ) %>%
+  select(`Odds Ratio`, `t value`)
+
+print(exer_final_table)
+
+```
+```{r}
+regTermTest(exer_ordinal_model, "EXERANY2")
+
+```
+
+After adjusting for age, the ordinal logistic regression revealed that engaging in physical activity has a significant protective effect. Individuals who engaged in physical activity in the past 30 days exhibited 22% lower odds of falling into a more severe mental health category compared to inactive individuals. So we reject the null hypothesis.
+
+**Loneliness**
+
+Null Hypthesis (H0) : The mean number of poor mental health days is equal across all loneliness groups. 
+Alternative Hypothesis(HA): At least one loneliness group has a different mean number of poor mental health days.
+
+```{r}
+
+model_sdlonely <- svyglm(MENTHLTH ~ SDLONELY, design = brfss_design)
+regTermTest(model_sdlonely, "SDLONELY")
+ 
+```
+
+The Wald test indicates that  F(4, 221797) = 1419.01, p < 0.001. Reject H0, mean number of poor mental health daysdiffers across loneliness levels.
+
+Post-hoc pairwise comparisons using Bonferroni adjustment:- 
+```{r}
+library(emmeans)
+
+lonely_emm <- emmeans(model_sdlonely, ~ SDLONELY)
+lonely_emm
+pairs(lonely_emm, adjust = "bonferroni")
+
+```
+
+```{r}
+library(ggplot2)
+
+plot_data_lonely <- as.data.frame(lonely_emm)
+
+
+d<- ggplot(plot_data_lonely, aes(x = SDLONELY, y = emmean, fill = SDLONELY)) +
+  geom_bar(stat = "identity", alpha = 0.8, color = "white") +
+
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2, size = 0.8) +
+
+  scale_fill_brewer(palette = "OrRd", direction = 1) + 
+  labs(
+    title = "Loneliness Frequency and Mental Health Distress",
+    subtitle = "Increased Loneliness frequency is associated with higher mean poor mental health days",
+    x = "Loneliness",
+    y = "Mean Poor Mental Health Days (95% CI)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    plot.title = element_text(face = "bold", size = 14)
+  )
+print(d)
+ggsave("mean_lonely_plot.png", width = 8, height = 5, dpi = 300)
+
+```
+
+```{r}
+library(emmeans)
+library(dplyr)
+library(knitr)
+
+# Pairwise comparisons
+lonely_pairs <- pairs(lonely_emm, adjust = "bonferroni")
+
+lonely_pairs_df <- as.data.frame(lonely_pairs)
+
+lonely_pairs_table <- lonely_pairs_df %>%
+  mutate(
+    estimate = round(estimate, 3),
+    SE = round(SE, 3),
+    t.ratio = round(t.ratio, 3),
+    p.value = format.pval(p.value, digits = 3, eps = .001)
+  ) %>%
+  select(contrast, estimate, SE, df, t.ratio, p.value)
+
+kable(
+  lonely_pairs_table,
+  caption = "Posthoc Pairwise Comparisons of Adjusted Mean Poor Mental Health Days by Loneliness",
+  col.names = c("Loneliness Levels Comparison", "Mean Difference", "SE", "df", "t Ratio", "p-value"),
+  align = "lccccc"
+)
+
+```
+
+```{r}
+lonely_pairs_ci <- confint(lonely_pairs)
+
+lonely_pairs_ci_df <- as.data.frame(lonely_pairs_ci)
+```
+
+```{r}
+sig_lonely_pairs_table_ci <- lonely_pairs_df %>%
+  mutate(
+    lower.CL = lonely_pairs_ci_df$lower.CL,
+    upper.CL = lonely_pairs_ci_df$upper.CL
+  ) %>%
+  filter(p.value < 0.05) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    SE = round(SE, 3),
+    lower.CL = round(lower.CL, 3),
+    upper.CL = round(upper.CL, 3),
+    t.ratio = round(t.ratio, 3),
+    p.value = format.pval(p.value, digits = 3, eps = .001)
+  ) %>%
+  select(contrast, estimate, SE, df, lower.CL, upper.CL, t.ratio, p.value)
+
+kable(
+  sig_lonely_pairs_table_ci,
+  caption = "Significant Bonferroni-Adjusted Pairwise Comparisons of Adjusted Mean Poor Mental Health Days by Loneliness",
+  col.names = c("Comparison", "Mean Difference", "SE", "df", "CI Lower", "CI Upper", "t Ratio", "p-value"),
+  align = "lccccccc"
+)
+```
+
+```{r message=FALSE}
+library(ggplot2)
+library(dplyr)
+
+plot_df_smoke <- sig_lonely_pairs_table_ci 
+
+e<- ggplot(plot_df_smoke, aes(x = estimate, y = reorder(contrast, estimate))) +
+  geom_point(size = 3) +
+  geom_errorbarh(aes(xmin = `lower.CL`, xmax = `upper.CL`), height = 0.2) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  labs(
+    x = "Difference in adjusted mean poor mental health days",
+    y = "Loneliness Levels Comparison",
+    title = "Adjusted Mean Differences(Loneliness levels)",
+    subtitle = "Bonferroni-adjusted 95% confidence intervals"
+  ) +
+  theme_minimal()
+print(e)
+ggsave("post_hoc_lonely_plot.png", width = 8, height = 5, dpi = 300)
+
+
+```
+
+The figure displays the Bonferroni-adjusted 95% confidence intervals for the differences in mean poor mental health days between loneliness levels. All comparisons were statistically significant, as evidenced by all confidence intervals remaining entirely to the left of the zero null line. The most pronounced difference was observed between the 'Never' and 'Always' lonely groups (Mean Difference -13.8 days). These results demonstrate a significant relationship, where every increase in the frequency of loneliness corresponds to a statistically significant increase in the number of reported poor mental health days.
+
+We also conducted an ordinal logistic regression to examine the odds of falling into higher categories of poor mental health. This allowed us to assess whether loneliness predicts not just the average number of days, but the severity of mental health distress.
+
+Null Hypothesis (H0):
+There is no relationship between loneliness frequency and mental health category. The odds of being in a more severe mental health category (e.g., Chronic) versus a less severe one (e.g., Resilient) are equal across all loneliness frequency groups.
+ 
+Alternative Hypothesis (H1):
+Loneliness frequency is a significant predictor of mental health category. The odds of being in a more severe mental health category significantly differ based on how often an individual feels lonely.
+
+
+```{r}
+
+sdlonely_ordinal_model <- svyolr(MENTHLTH_CAT ~ SDLONELY, design = brfss_design)
+
+exp(coef(sdlonely_ordinal_model))
+
+summary(sdlonely_ordinal_model)
+
+```
+
+
+ 
+```{r}
+coeffs <- summary(sdlonely_ordinal_model)$coefficients
+sdlonely_results <- coeffs[1:4, ]
+```
+ 
+```{r}
+sdlonely_results
+```
+
+
+```{r}
+coefs <- sdlonely_results[1:4, "Value"]
+ses <- sdlonely_results[1:4, "Std. Error"]
+t_vals <- sdlonely_results[1:4, "t value"]
+
+OR <- exp(coefs)
+lower_CI <- exp(coefs - 1.96 * ses)
+upper_CI <- exp(coefs + 1.96 * ses)
+
+raw_p_val <- 2 * pnorm(abs(t_vals), lower.tail = FALSE)
+adj_p_val <- raw_p_val * 4  # Adjusted for the 4 loneliness levels
+adj_p_val <- ifelse(adj_p_val > 1, 1, adj_p_val) # Cap at 1.0
+
+
+final_table <- data.frame(
+  "Loneliness_Level" = c("Rarely", "Sometimes", "Usually", "Always"),
+  "Odds_Ratio" = round(OR, 2),
+  "Lower_95_CI" = round(lower_CI, 2),
+  "Upper_95_CI" = round(upper_CI, 2),
+  "P_value_Adj" = format.pval(adj_p_val, eps = .001, digits = 3)
+)
+
+print(final_table)
+```
+```{r}
+library(knitr)
+
+rownames(final_table) <- NULL
+
+kable(
+  final_table,
+  caption = "Odds Ratios for Mental Health Severity by Loneliness Level",
+  col.names = c("Loneliness Level", "Odds Ratio", "Lower 95% CI", "Upper 95% CI", "Adjusted p-value"),
+  align = "lcccc"
+)
+```
+
+This ordinal logistic regression shows that loneliness frequency is a powerful predictor of mental health category severity, with all coefficients highly significant (p < 0.001). Using "Never" lonely as the reference category, the coefficients increase progressively: "Rarely" (2.58), "Sometimes" (6.19), "Usually" (15.71), and "Always" (21.65). This means that individuals who report feeling lonely "Always" have 21.65 higher odds of being in a more severe mental health category (e.g., Chronic vs. Frequent) compared to those who "Never" feel lonely. The intercepts(in the summary) represent thresholds between categories, with the largest gap between the Chronic threshold and the Frequent threshold (3.98), indicating a substantial distinction between frequent and chronic mental health distress. Overall, the model demonstrates a clear, relationship where more frequent loneliness corresponds to increasingly worse mental health outcomes.
+
+
+
+**Do Social Determinants explain variation in poor mental health days beyond demographic/behavioral factors** :-
+
+
+Null Hypothesis :- Social determinants (loneliness, emotional support, life satisfaction, and perceived safety) are not associated with poor mental health after controlling for demographic and behavioral factors.
+
+Mathematically: The coefficients for SDLONELY ,EMTSUPRT ,Support,Life Satisfaction are equal to zero in the full model.
+
+Alternative Hypothesis: Social determinants (Loneliness, Emotional Support,Life Satisfaction, Environment Safety)  are associated with poor mental health after controlling for demographic and behavioral factors.
+
+Mathematically: At least one social determinant coefficient is significantly different from zero in the full model
+
+A joint Wald test was conducted to assess whether the set of social determinant variables (loneliness, emotional support, life satisfaction, and perceived safety) contributes significantly to the model after adjusting for demographic and behavioral covariates. The null hypothesis states that all coefficients corresponding to the social determinants are equal to zero, while the alternative hypothesis states that at least one of these coefficients is non-zero. 
+
+```{r}
+model_full <- svyolr(
+  MENTHLTH_CAT ~ AGE4 + SEX + INCOMG1 + RACE + SMOKER3 + EXERANY2 + SDLONELY +EMTSUPRT + LSATISFY + HOWSAFE1 ,
+  design = brfss_design
+)
+
+```
+
+```{r}
+# Joint Wald Test
+# This tests the "Social Block" while holding everything else constant
+social_beyond_test <- regTermTest(model_full, ~ SDLONELY + EMTSUPRT+LSATISFY+HOWSAFE1)
+
+print(social_beyond_test)
+
+```
+```{r}
+regTermTest(model_full, ~ SDLONELY)
+regTermTest(model_full, ~ EMTSUPRT)
+regTermTest(model_full , ~LSATISFY)
+regTermTest(model_full , ~HOWSAFE1)
+```
+
+
+To test whether social determinants provide explanatory power beyond demographic and behavioral factors, a joint Wald test was performed on the fully adjusted model. The results were highly significant (p<0.001), supporting the hypothesis that social factors are independent and vital predictors of mental health. Individual Wald tests revealed that Loneliness (SDLONELY) was the most influential factor (F = 534.088), followed by Life Satisfaction. This suggests that while demographics like income and age matter, a person's subjective social experience is the primary driver of mental health distress in this population.
+
+
+```{r}
+vars_to_test <- c("AGE4", "SEX", "INCOMG1", "RACE", "SMOKER3",
+                  "EXERANY2", "SDLONELY", "EMTSUPRT", "LSATISFY", "HOWSAFE1")
+
+results_list <- list()
+
+for (v in vars_to_test) {
+  test_formula <- as.formula(paste0("~", v))
+  
+  test_output <- tryCatch(
+    regTermTest(model_full, test_formula),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(test_output)) {
+    results_list[[v]] <- data.frame(
+      Variable = v,
+      F_Statistic = as.numeric(test_output$Ftest),
+      p_value = as.numeric(test_output$p)
+    )
+  }
+}
+
+library(dplyr)
+library(knitr)
+
+final_leaderboard <- bind_rows(results_list) %>%
+  mutate(
+    F_Statistic = round(F_Statistic, 2),
+    p_value = format.pval(p_value, eps = .001, digits = 3)
+  ) %>%
+  arrange(desc(F_Statistic))
+
+kable(final_leaderboard, caption = "Significance of each factor(Wald Test)", align = "c")
+```
+
+```{r}
+model_results <- as.data.frame(summary(model_full)$coefficients)
+
+#Odds Ratios and 95% Confidence Intervals
+model_results$OR <- exp(model_results$Value)
+model_results$Lower_CI <- exp(model_results$Value - (1.96 * model_results$`Std. Error`))
+model_results$Upper_CI <- exp(model_results$Value + (1.96 * model_results$`Std. Error`))
+
+or_summary <- model_results %>%
+  select(OR, Lower_CI, Upper_CI, `t value`) %>%
+  mutate(across(everything(), round, 2))
+
+print(or_summary)
+
+```
+
+```{r}
+library(dplyr)
+library(tibble)
+library(knitr)
+
+important_or <- model_results %>%
+  rownames_to_column("Variable") %>%
+  filter(Variable %in% c(
+    "SEXFemale",
+    "AGE465+",
+    "SMOKER3Everyday smoker",
+    "SDLONELYAlways",
+    "EMTSUPRTRarely",
+    "LSATISFYVery dissatisfied",
+    "HOWSAFE1Extremely Unsafe",
+    "EXERANY2Yes"
+  )) %>%
+  mutate(
+    Predictor = c(
+      "Female vs Male",
+      "Age 65+ vs 18–34",
+      "Everyday smoker vs Never smoked",
+      "Always lonely vs Never",
+      "Rare emotional support vs Always",
+      "Very dissatisfied vs Very satisfied",
+      "Extremely unsafe vs Very safe",
+      "Physical activity: Yes vs No"
+    ),
+    `Odds Ratio` = round(OR, 2),
+    `Lower 95% CI` = round(Lower_CI, 2),
+    `Upper 95% CI` = round(Upper_CI, 2)
+  ) %>%
+  select(Predictor, `Odds Ratio`, `Lower 95% CI`, `Upper 95% CI`)
+
+kable(
+  important_or,
+  caption = "Key Adjusted Odds Ratios from the Full Ordinal Regression Model",
+  align = "lccc"
+)
+```
+The joint Wald tests show that, in the full multivariable ordinal regression, almost all variables are significantly associated with worse mental health. Ranked by overall contribution, the strongest factors are sex, loneliness, age group, and life satisfaction. Emotional support and smoking status are also important, while perceived safety and income have smaller but still significant overall effects. Physical activity is the only variable here that is not statistically significant overal (p=0.104). From the odds ratios, the clearest patterns are: Compared with ages 18-34, older groups have lower odds of being in a worse mental health category. The odds are especially low for adults aged 65+ (OR=0.29), showing a strong age gradient. Females have substantially higher odds of worse mental health than males (OR=1.72). Smoking is associated with poorer mental health, and the odds increase with smoking frequency: former smokers (OR=1.32), someday smokers  (OR=1.37), and everyday smokers(OR=1.51). Loneliness shows one of the strongest patterns in the model. Compared with those who never feel lonely, the odds rise sharply for rarely (OR=1.90), sometimes (OR=3.47), usually (OR=6.04), and always lonely (OR=7.44). Life satisfaction is another major predictor. Compared with those who are very satisfied, the odds are much higher for satisfied (OR=1.78), dissatisfied (OR=5.65), and especially very dissatisfied(OR=9.18). Lower emotional support is also associated with worse mental health, with odds ratios ranging from 1.34 to 1.89 relative to always receiving support. Perceived safety has a smaller but meaningful effect: feeling unsafe(OR=1.31) or extremely unsafe (OR=1.39) is associated with worse mental health. Income has a comparatively weak and mixed adjusted effect in this full model. Race shows some significant differences for certain groups, but the effects are generally smaller than those for loneliness, life satisfaction, sex, and age. 
+
+In the fully adjusted ordinal regression model, social determinants remained strongly associated with poor mental health after controlling for demographic and behavioral factors. Among all predictors, loneliness and life satisfaction showed the strongest associations, followed by sex and age group. Lower emotional support and smoking were also important contributors, whereas physical activity was not statistically significant in the full model. Overall, these findings suggest that social, behavioral factors play a major role in explaining poor mental health beyond demographic characteristics.
+
+
+```{r}
+regTermTest(model_full, ~ SDLONELY + EMTSUPRT + LSATISFY + HOWSAFE1)
+```
+
+```{r}
+regTermTest(model_full, ~ AGE4+SEX+INCOMG1+RACE)
+```
+```{r}
+regTermTest(model_full, ~ EXERANY2 + SMOKER3)
+```
+
+To determine whether social health provides explanatory power beyond demographic and behavioral factors, we conducted joint Wald tests on three distinct blocks of predictors within the fully adjusted model. The results  show that while all blocks were highly significant (p<0.001), the social determinants block exhibited the highest statistical strength (563.2536). This was substantially higher than the F-statistics for the demographic (F=135.8079) and behavioral (51.72446) blocks, confirming that social health is the primary determinant of mental health burden in this model.
+
+
+**Does emotional support modify the relationship between loneliness and mental health severity?**
+
+Null hypothesis (H 0): The association between loneliness and mental health does not differ by emotional support. 
+Alternative hypothesis (H 1): The association between loneliness and mental health differs by emotional support.
+
+```{r}
+interaction_model_support <- svyolr(
+  MENTHLTH_CAT ~ AGE4 + SEX + SDLONELY*EMTSUPRT+INCOMG1 + RACE + SMOKER3 + EXERANY2  + LSATISFY + HOWSAFE1 ,
+  design = brfss_design
+)
+
+```
+
+```{r}
+regTermTest(interaction_model_support, ~ SDLONELY:EMTSUPRT)
+```
+
+To assess whether emotional support modifies the relationship between loneliness and mental health, an interaction term between loneliness (SDLONELY) and emotional support (EMTSUPRT) was included in the survey-weighted ordered logistic regression model. The Wald test for the interaction was statistically significant ( F = 4.43 , p < 0.001 ) . This provides strong evidence that the effect of loneliness on chronic poor mental health varies depending on the level of emotional support.
+
+Emotional support significantly moderates the relationship between loneliness and mental health. This provides evidence for the Buffering Effect, where the presence of high social support can help neutralize the negative impact of loneliness on mental health severity.
+
+```{r}
+library(emmeans)
+
+emm_prob_support <- emmeans(
+  interaction_model_support,
+  ~ MENTHLTH_CAT | SDLONELY + EMTSUPRT,
+  mode = "prob",
+  nuisance = c("SEX", "INCOMG1", "AGE4", "LSATISFY", "HOWSAFE1","RACE","SMOKER3","EXERANY2")
+)
+
+emm_prob_support_df <- as.data.frame(emm_prob_support)
+```
+
+```{r}
+emm_prob_support_chronic <- subset(emm_prob_support_df, MENTHLTH_CAT == 4)
+```
+
+Adjusted predicted probabilities were estimated from the interaction model to visualize the relationship between loneliness, emotional support, and chronic poor mental health. After averaging over the remaining variables, the predicted probability of being in the chronic mental health category was plotted across loneliness levels for each emotional support group. The plot shows that chronic poor mental health becomes more likely as loneliness increases, and that this increase is strongest among individuals with low emotional support, indicating a buffering role of emotional support.Predicted probabilities were averaged over the distribution of other covariates in the model, meaning that the results represent population-level estimates rather than values for a specific subgroup.
+
+```{r}
+library(ggplot2)
+
+emm_prob_support_chronic$SDLONELY <- factor(
+  emm_prob_support_chronic$SDLONELY,
+  levels = c("Never", "Rarely", "Sometimes", "Usually", "Always")
+)
+
+pred<- ggplot(
+  emm_prob_support_chronic,
+  aes(x = SDLONELY, y = prob, color = EMTSUPRT, group = EMTSUPRT)
+) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Predicted Probability of Chronic Poor Mental Health\nby Loneliness and Emotional Support",
+    x = "Loneliness Level",
+    y = "Predicted Probability of Chronic Mental Health",
+    color = "Emotional Support"
+  ) +
+  theme_minimal()+
+    theme(
+    axis.text.x = element_text( hjust = 1, size = 10),
+    plot.title = element_text(face = "bold", size = 14),
+    
+  )
+print(pred)
+ggsave("predicted_probability.png", width = 8, height = 5, dpi = 300)
+
+```
+
+
+The predicted probability plot demonstrates a strong interaction between loneliness and emotional support. While the probability of chronic poor mental health increases with loneliness across all groups, this increase is substantially steeper among individuals with lower emotional support. In contrast, individuals with high emotional support show a much weaker increase, suggesting that emotional support may buffer the adverse effects of loneliness on mental health.
+
+The interaction plot confirms the buffering effect of emotional support on loneliness related mental health distress. While the predicted probability of chronic poor mental health increases with loneliness for all groups, the magnitude of this increase is significantly mitigated for individuals who report having emotional support 'Always' or 'Usually' available. Specifically, for those who are 'Always' lonely, having constant emotional support reduces the predicted probability of chronic distress by more than half compared to those with limited support.
+
+Our hypothesis was strongly supported. Not only did loneliness and social support independently predict mental health, but their interaction was highly significant (p<0.001). The analysis reveals a clear buffering effect, where high emotional support significantly reduces the probability of chronic mental health distress, even among the most lonely individuals
+
+Use case in real life
+These findings suggest that interventions aimed at increasing emotional support may help reduce the negative mental health impact of loneliness, particularly among individuals who experience high levels of loneliness.
+
+```{r}
+library(dplyr)
+library(survey)
+library(knitr)
+
+vars <- c("AGE4", "INCOMG1", "SMOKER3", "SDLONELY","RACE")
+
+summary_list <- lapply(vars, function(var) {
+  
+  unweighted <- brfss1 %>%
+    count(.data[[var]]) %>%
+    mutate(
+      Proportion = n / sum(n),
+      Type = "Unweighted"
+    )
+  
+  weighted <- svytable(as.formula(paste0("~", var)), brfss_design) %>%
+    prop.table() %>%
+    as.data.frame()
+  
+  colnames(weighted) <- c(var, "Proportion")
+  weighted$Type <- "Weighted"
+  
+  bind_rows(
+    unweighted %>% rename(Level = !!var),
+    weighted %>% rename(Level = !!var)
+  ) %>%
+    mutate(Variable = var) %>%
+    select(Variable, Level, Type, Proportion)
+})
+
+final_summary <- bind_rows(summary_list)
+
+kable(final_summary,
+      caption = "Comparison of Weighted vs Unweighted Distributions Across Key Variables",
+      digits = 3)
+
+```
+
+
+
+
+
+
+
+
+
+
+

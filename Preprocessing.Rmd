@@ -1,0 +1,558 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Variables selected from the code book for the project :- 
+
+1. MENTHLTH :- Number of Days Mental Health Not Good in past 30 days ,
+2. GENHLTH :- General Health status (Section Name: Health Status),
+3. EXERANY2 :-  Exercise in Past 30 Days (Yes/No Section Name: Exercise (Physical Activity)),
+4. ADDEPEV3 :- (Ever told) you had a depressive disorder (Section Name: Chronic Health Conditions) ,
+5. MARITAL :-  Marital Status(Section Name: Demographics) ,
+6. EDUCA :- Education Level(Section Name: Demographics), 
+7. DECIDE :- Difficulty Concentrating or Remembering(Section Name: Disability),
+8. DIFFALON :- Label: Difficulty Doing Errands Alone(Section Name: Disability),
+9. LSATISFY :- Satisfaction with life(Section Name: Social Determinants),
+10. EMTSUPRT :- : How often get emotional support needed(Section Name: Social Determinants) ,
+11. EMPLOY1 :- Employment Status(Section Name: Demographics),
+12. SDLONELY :- How often do you feel lonely?(Section Name: Social Determinants),
+13. HOWSAFE1 :- Neighborhood Safe From Crime(Section Name: Social Determinants),
+14.`_RACE`:- Calculated Race Variables(Race/ethnicity categories), 
+15.`_SEX` :- Calculated sex variable,
+16.`_AGEG5YR` :- Reported age in five-year age categories calculated variable, 
+17.`_BMI5CAT` :- Computed body mass index categories ,
+18. `_INCOMG1` :- Computed income categories,
+19.`_SMOKER3` :- Computed Smoking Status,
+20.`_STATE`:- STATE,
+21. _LLCPWT :- 
+Each row (person) does NOT represent 1 person
+
+
+Factors :- 
+
+1. Outcome:- MENTHLTH
+2. Social determinants:- LSATISFY,EMTSUPRT,SDLONELY,HOWSAFE1
+3. Behavioral :- EXERANY2,_SMOKER3
+4. Physical / health status :- GENHLTH,ADDEPEV3,DECIDE,DIFFALON,_BMI5CAT
+5. Demographic :- _SEX,_AGEG5YR,_INCOMG1,_RACE,EDUCA,MARITAL,EMPLOY1,_STATE
+6. Survey design:- _LLCPWT(Final weight assigned to each respondent)
+
+
+```{r}
+library(tidyverse)
+```
+```{r}
+library(haven)
+brfss <- read_xpt("C:/Users/MEGHANA/Desktop/DS/DS Project/LLCP2024.XPT")
+```
+
+```{r}
+dim(brfss)        
+```
+
+```{r}
+brfss %>%
+  filter(!is.na(EMTSUPRT)) %>%
+  distinct(`_STATE`) %>%
+  arrange(`_STATE`)
+```
+
+```{r}
+brfss %>%
+  filter(!is.na(LSATISFY)) %>%
+  distinct(`_STATE`) %>%
+  arrange(`_STATE`)
+```
+
+```{r}
+brfss %>%
+  filter(!is.na(SDLONELY)) %>%
+  distinct(`_STATE`) %>%
+  arrange(`_STATE`)
+```
+
+```{r}
+brfss %>%
+  filter(!is.na(HOWSAFE1)) %>%
+  distinct(`_STATE`) %>%
+  arrange(`_STATE`)
+```
+
+"*"Filtering states where social determinant questions were not asked: SDLONELY, EMTSPRT,LSATISFY,HOWSAFE1"*"
+
+The dataset was restricted to the 33 states in which social determinant variables were administered. These states were identified based on the presence of non-missing responses for the social determinant variables, and all respondents from these states were retained for analysis
+
+```{r}
+states_social <- brfss %>%
+  filter(!is.na(SDLONELY) | !is.na(EMTSUPRT) | !is.na(LSATISFY) |!is.na(HOWSAFE1)) %>%
+  distinct(`_STATE`) %>%
+  pull(`_STATE`)
+
+```
+
+```{r}
+unique(states_social)
+```
+
+```{r}
+brfss <- brfss %>%
+  filter(`_STATE` %in% states_social)
+```
+
+```{r}
+dim(brfss)
+
+```
+
+```{r}
+brfss_subset <- brfss %>%
+  select(
+    MENTHLTH,
+    GENHLTH,
+    EXERANY2,
+    ADDEPEV3,
+    MARITAL,
+    EDUCA, 
+    DECIDE,
+    DIFFALON,
+    LSATISFY,
+    EMTSUPRT ,
+    EMPLOY1,
+    SDLONELY,
+    HOWSAFE1,
+    `_RACE`, 
+    `_SEX`,
+    `_AGEG5YR`, 
+    `_BMI5CAT`,
+    `_INCOMG1`,
+    `_SMOKER3`,
+    `_STATE`,
+    `_LLCPWT`
+  )
+```
+
+```{r}
+brfss_subset <- brfss_subset %>%
+  mutate(state_name = recode(as.character(`_STATE`),
+    "1"="Alabama", "2"="Alaska", "4"="Arizona", "5"="Arkansas", "6"="California",
+    "8"="Colorado", "9"="Connecticut", "10"="Delaware", "11"="District of Columbia",
+    "12"="Florida", "13"="Georgia", "15"="Hawaii", "16"="Idaho", "17"="Illinois",
+    "18"="Indiana", "19"="Iowa", "20"="Kansas", "21"="Kentucky", "22"="Louisiana",
+    "23"="Maine", "24"="Maryland", "25"="Massachusetts", "26"="Michigan",
+    "27"="Minnesota", "28"="Mississippi", "29"="Missouri", "30"="Montana",
+    "31"="Nebraska", "32"="Nevada", "33"="New Hampshire", "34"="New Jersey",
+    "35"="New Mexico", "36"="New York", "37"="North Carolina", "38"="North Dakota",
+    "39"="Ohio", "40"="Oklahoma", "41"="Oregon", "42"="Pennsylvania",
+    "44"="Rhode Island", "45"="South Carolina", "46"="South Dakota",
+    "48"="Texas", "49"="Utah", "50"="Vermont", "51"="Virginia",
+    "53"="Washington", "54"="West Virginia", "55"="Wisconsin", "56"="Wyoming",
+    "66"="Guam", "72"="Puerto Rico", "78"="Virgin Islands"
+  ))
+```
+
+Recoding special BRFSS response codes to NA based on the code book:-
+
+```{r}
+brfss_subset$MENTHLTH[brfss_subset$MENTHLTH %in% c(77,99)] <- NA
+
+brfss_subset$MENTHLTH[brfss_subset$MENTHLTH == 88] <- 0
+
+brfss_subset$MARITAL[brfss_subset$MARITAL == 9] <- NA
+brfss_subset$EDUCA[brfss_subset$EDUCA == 9] <- NA
+```
+
+```{r}
+binary_vars <- c("GENHLTH","EXERANY2","ADDEPEV3","DECIDE","DIFFALON","LSATISFY","EMTSUPRT","SDLONELY","HOWSAFE1")
+
+brfss_subset[binary_vars] <- lapply(brfss_subset[binary_vars], function(x){
+  x[x %in% c(7,9)] <- NA
+  x
+})
+```
+
+
+```{r}
+brfss_subset$`_INCOMG1`[brfss_subset$`_INCOMG1` == 9] <- NA
+brfss_subset$`_SMOKER3`[brfss_subset$`_SMOKER3` == 9] <- NA
+brfss_subset$EMPLOY1[brfss_subset$EMPLOY1 == 9] <- NA
+```
+
+```{r}
+round(colMeans(is.na(brfss_subset))*100,2)
+```
+Observations with missing values for the outcome variable MENTHLTH were excluded from the analysis, since outcome information is required for regression and inferential procedures. Because missingness in MENTHLTH was low (1.77%), this exclusion was considered unlikely to substantially affect the analysis.
+
+```{r}
+brfss_subset <- brfss_subset |>
+  filter(!is.na(MENTHLTH))
+
+```
+
+
+```{r}
+round(colMeans(is.na(brfss_subset))*100,2)
+```
+
+
+The missingness we are seeing above are item non response(Missing values/cells in a column) 
+The missingness observed in the dataset is primarily item non-response, since respondents remain in the dataset but have missing values for specific variables.
+
+
+Type of missingness that can be interpreted(MCAR/MAR/MNAR)
+
+1. MENTHLTH :- Missingness in "MENTHLTH" is low and likely Missing at Random (MAR), as non response may depend on observable characteristics such as demographic or health-related factors.
+2. LSATISFY :- Likely MAR, though MNAR cannot be ruled out as respondents with lower life satisfaction may be less likely to respond.
+3. EMTSUPRT :- Likely MAR, as missingness may depend on observed characteristics such as age, marital status, or social context.
+4. SDLONELY :-  MAR (possible MNAR) Likely MAR, but MNAR is possible since individuals experiencing higher loneliness may be less likely to respond.
+5. HOWSAFE1 :- Likely MAR, as missingness may be related to observed geographic or socioeconomic factors.
+6. EXERANY2 :- Likely MAR, as response may depend on observable lifestyle or health characteristics.
+7. _SMOKER3 :- Likely MAR, as smoking behavior may be related to observable demographic or health factors.
+8. GENHLTH :- Likely MNAR, as respondents may be less likely to report income due to its sensitive nature.
+
+Overall, the dataset primarily exhibits item non-response. Most variables are likely Missing at Random (MAR), as missingness appears to be related to observable characteristics. However, for sensitive variables such as income, missingness may be Missing Not at Random (MNAR). The assumption of MAR is used as a working assumption for analysis, with MNAR acknowledged as a limitation.
+
+```{r}
+na_pct <- round(colMeans(is.na(brfss_subset)) * 100, 2)
+
+na_pct[na_pct > 0]
+```
+```{r}
+na_pct_df <- data.frame(
+  variable = names(na_pct),
+  missing_percent = na_pct
+)
+
+na_pct_df[na_pct_df$missing_percent > 0, ]
+
+```
+
+
+```{r}
+library(ggplot2)
+
+na_pct <- round(colMeans(is.na(brfss_subset)) * 100, 2)
+
+na_pct_df <- data.frame(
+  variable = names(na_pct),
+  missing_percent = na_pct
+)
+
+na_pct_df <- na_pct_df[na_pct_df$missing_percent > 0, ]
+
+p<-ggplot(na_pct_df, aes(x = reorder(variable, -missing_percent), y = missing_percent)) +
+  geom_col() +
+  coord_flip() +
+  geom_text(aes(label = missing_percent), hjust = -0.1, size = 3) +
+  labs(
+    title = "Percentage of Missing Values by Variable",
+    x = "Variable",
+    y = "Missing Percentage"
+  ) +
+  ylim(0, max(na_pct_df$missing_percent) + 5)
+
+print(p)
+ggsave("missingpercent_variables.png", width = 8, height = 5, dpi = 300)
+
+```
+
+
+Categorizing the variables having very low missing %:- 
+
+EXERANY2,MARITAL,EDUCA,ADDEPEV3,EMPLOY1,GENHLTH,_TOTINDA
+
+
+Recoding categorical variables as factors and converting ordered categorical variables to ordered factors:-
+
+```{r}
+
+library(dplyr)
+
+brfss_subset <- brfss_subset%>%
+  mutate(
+  
+    # General Health -> ordinal
+    GENHLTH = factor(GENHLTH,
+                     levels = 1:5,
+                     labels = c("Excellent", "Very good", "Good", "Fair", "Poor"),
+                     ordered = TRUE
+                     ),
+    
+    # Exercise 
+    EXERANY2 = factor(EXERANY2,
+                      levels = 1:2,
+                      labels = c("Yes","No")),
+    
+    # Ever told had depressive disorder
+    ADDEPEV3 = factor(ADDEPEV3,
+                      levels = 1:2,
+                      labels = c("Yes","No")),
+    
+    # Marital Status
+    MARITAL = factor(MARITAL,
+                     levels = 1:6,
+                     labels = c("Married","Divorced","Widowed","Separated","Never married"," Partnered")),
+    
+    # Education
+    EDUCA = factor(EDUCA,
+                   levels = 1:6,
+                   labels = c("Never attended","Elementary"," High school","High school graduate","College/tech","College graduate")),
+    
+    
+    # Decision-making Difficulty
+    DECIDE = factor(DECIDE,
+                    levels = 1:2,
+                    labels = c("Yes","No")),
+    
+    # Difficulty Doing Errands Alone
+    DIFFALON = factor(DIFFALON,
+                      levels = 1:2,
+                      labels = c("Yes","No")),
+    
+    
+    # Life Satisfaction
+    LSATISFY = factor(LSATISFY,
+                      levels = 1:4,
+                      labels = c("Very satisfied","Satisfied","Dissatisfied","Very dissatisfied"),
+                      ordered = TRUE
+                      ),
+    
+    # Emotional Support
+    EMTSUPRT = factor(EMTSUPRT,
+                      levels = 1:5,
+                      labels = c("Always","Usually","Sometimes","Rarely","Never"),
+                      ordered=TRUE),
+    
+    # Loneliness
+    SDLONELY = factor(SDLONELY,
+                      levels = 1:5,
+                      labels = c("Always","Usually","Sometimes","Rarely","Never"),
+                      ordered = TRUE),
+    
+    
+    # Neighborhood Safety
+    HOWSAFE1 = factor(HOWSAFE1,
+                      levels = 1:4,
+                      labels = c(" Extremely safe","Safe"," Unsafe","Extremely Unsafe"),
+                      ordered = TRUE),
+    
+    # Race
+    `_RACE` = factor(`_RACE`,
+                        levels = 1:8,
+                        labels = c("White","Black","American Indian/Alaskan Native","Asian","Native Hawaiian or other Pacific
+Islander ","Other","Multiracial"," Hispanic")),
+    
+    
+    
+    
+    
+    # Sex
+    `_SEX` = factor(`_SEX`,
+                    levels = 1:2,
+                    labels = c("Male","Female")),
+    
+    # Age Group
+    `_AGEG5YR` = factor(`_AGEG5YR`,
+                        levels = 1:13,
+                        labels = c("18-24","25-29","30-34","35-39","40-44","45-49",
+                                   "50-54","55-59","60-64","65-69","70-74","75-79","80+"),
+                        ordered = TRUE),
+    
+    # BMI Category
+    `_BMI5CAT` = factor(`_BMI5CAT`,
+                        levels = 1:4,
+                        labels = c("Underweight","Normal","Overweight","Obese"),
+                        ordered = TRUE),
+    
+    # Income
+    `_INCOMG1` = factor(`_INCOMG1`,
+                        levels = 1:7,
+                        labels = c("<$15k","$15-25k","$25-35k","$35-50k","$50k-$100k","$100k-$200k",">$200k"),
+                        ordered=TRUE),
+    
+    # Smoking Status
+    `_SMOKER3` = factor(`_SMOKER3`,
+                        levels = 1:4,
+                        labels = c("Everyday smoker","Someday smoker","Former smoker","Never smoked")),
+
+
+EMPLOY1 = factor(EMPLOY1,
+                        levels = 1:8,
+                        labels = c("Employed for Wages","Self Employed","Out of work for 1 year or more","Out of work for less than 1 year","Homemaker","Student","Retired","Unable to Work")))
+    
+    
+```
+
+
+
+```{r}
+library(tidyverse)
+brfss_final <- brfss_subset%>%
+  drop_na(
+    MENTHLTH
+  )%>% select(-`_STATE`)
+
+```
+
+
+```{r}
+#brfss_final
+```
+```{r}
+round(colMeans(is.na(brfss_final))*100,2)
+```
+
+```{r}
+nrow(brfss_final)
+
+```
+
+```{r}
+brfss_hybrid <- brfss_final %>%
+  drop_na(EXERANY2, MARITAL, EDUCA, EMPLOY1,`_RACE`,`_AGEG5YR`)
+```
+
+```{r}
+nrow(brfss_hybrid)
+```
+```{r}
+((nrow(brfss_final)-nrow(brfss_hybrid))/nrow(brfss_final))*100
+
+```
+
+```{r}
+round(colMeans(is.na(brfss_hybrid))*100,2)
+```
+
+```{r}
+brfss_hybrid <- brfss_hybrid %>%
+  mutate(row_id = row_number())
+```
+
+
+```{r}
+length(unique(brfss_hybrid$row_id))
+```
+MICE for imputing data :-
+
+
+Missing predictor values were handled using Multiple Imputation by Chained Equations (MICE). MICE fills in missing values by using the relationships among the other observed variables in the dataset. Instead of replacing all missing values with a single fixed value such as the mean, MICE predicts plausible values for each missing entry based on information from similar observations. This process is repeated for each variable with missing data and across multiple iterations, producing several imputed datasets. The final analysis is then performed on each dataset and combined to reflect the uncertainty due to missingness. MICE is good for MAR.
+
+
+```{r}
+impute_data <- brfss_hybrid %>%
+  select(
+    row_id,
+    MENTHLTH, GENHLTH, ADDEPEV3,
+    DECIDE, DIFFALON,
+    LSATISFY, EMTSUPRT, SDLONELY, HOWSAFE1,
+    `_BMI5CAT`, `_INCOMG1`, `_SMOKER3`,
+    EXERANY2, MARITAL, EDUCA, EMPLOY1, `_RACE`, `_SEX`, `_AGEG5YR`
+  )
+```
+
+logreg :- methord for binary variables(logistic regression)
+polyrgr :- method of more than 2 categorical values in a variable(nominal categorical variable)
+poly :- method for ordinal categorical variable 
+
+```{r}
+library(mice)
+```
+
+```{r}
+
+init <- mice(impute_data, maxit = 0)
+meth <- init$method
+pred <- init$predictorMatrix
+meth["MENTHLTH"]  <- ""
+
+meth["GENHLTH"]   <- "polr"
+meth["ADDEPEV3"]  <- "logreg"
+
+meth["DECIDE"]    <- "logreg"
+meth["DIFFALON"]  <- "logreg"
+
+meth["LSATISFY"]  <- "polr"
+meth["EMTSUPRT"]  <- "polr"
+meth["SDLONELY"]  <- "polr"
+meth["HOWSAFE1"]  <- "polr"
+
+meth["_BMI5CAT"]  <- "polr"
+meth["_INCOMG1"]  <- "polr"
+meth["_SMOKER3"]  <- "polyreg"
+
+meth["EXERANY2"]  <- ""
+meth["MARITAL"]   <- ""
+meth["EDUCA"]     <- ""
+meth["EMPLOY1"]   <- ""
+meth["_RACE"]     <- ""
+meth["_SEX"]      <- ""
+meth["_AGEG5YR"]  <- ""
+meth["row_id"] <- ""
+pred["row_id", ] <- 0
+pred[, "row_id"] <- 0
+
+
+```
+
+```{r}
+pred
+
+```
+Five imputed datasets (m = 5) were generated, and each imputation was iteratively refined over five cycles (maxit = 5) to ensure stability of the imputed values.
+
+Multiple imputation using MICE was applied to address missing data. A single completed dataset was used for subsequent analyses, including hypothesis testing and group comparisons. This approach preserves relationships between variables and is superior to simpler imputation methods such as mean or median imputation. However, it does not fully account for uncertainty in the imputed values.
+
+```{r}
+#imp <- mice(
+# impute_data,
+#  method = meth,
+#  predictorMatrix = pred,
+#  m = 5,
+#  maxit = 5,
+#  seed = 123
+#)
+```
+
+```{r}
+#summary(imp)
+
+```
+
+
+```{r}
+#completed1 <- complete(imp,1)
+
+```
+
+
+```{r}
+#completed1
+
+```
+
+
+```{r}
+#completed1_full <- completed1 %>%
+#  left_join(
+#    brfss_hybrid |>
+#      select(row_id, `_LLCPWT`, state_name),
+#    by = "row_id"
+#  )
+```
+
+```{r}
+#round(colMeans(is.na(completed1_full))*100,2)
+```
+```{r}
+#write.csv(completed1_full,"completed1_full_brfss.csv",row.names = FALSE)
+
+```
+

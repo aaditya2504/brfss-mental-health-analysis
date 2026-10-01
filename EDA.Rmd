@@ -1,0 +1,1421 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+brfss1 <- read.csv("C:/Users/MEGHANA/Downloads/completed1_full_brfss.csv",check.names = FALSE)
+```
+
+
+```{r}
+names(brfss1) <- sub("^_", "", names(brfss1))
+```
+
+
+```{r}
+
+library(dplyr)
+library(stringr)
+
+# This applies str_trim to EVERY character column in dataframe
+brfss1 <- brfss1 %>%
+  mutate(across(where(is.character), str_trim))
+
+```
+
+
+
+```{r}
+brfss1$GENHLTH <- factor(
+  brfss1$GENHLTH,
+  levels = c("Excellent", "Very good", "Good", "Fair", "Poor")
+)
+brfss1$ADDEPEV3  <- factor(brfss1$ADDEPEV3)
+brfss1$DECIDE    <- factor(brfss1$DECIDE)
+brfss1$DIFFALON  <- factor(brfss1$DIFFALON)
+brfss1$LSATISFY <- factor(
+  brfss1$LSATISFY,
+  levels = c("Very satisfied", "Satisfied", "Dissatisfied", "Very dissatisfied")
+)
+brfss1$EMTSUPRT <- factor(
+  brfss1$EMTSUPRT,
+  levels = c("Always", "Usually", "Sometimes", "Rarely", "Never")
+)
+brfss1$SDLONELY <- factor(
+  brfss1$SDLONELY,
+  levels = c("Never", "Rarely", "Sometimes", "Usually", "Always")
+)
+brfss1$HOWSAFE1 <- factor(
+  brfss1$HOWSAFE1,
+  levels = c("Extremely safe", "Safe", "Unsafe", "Extremely Unsafe")
+)
+brfss1$BMI5CAT <- factor(
+  brfss1$BMI5CAT,
+  levels = c("Underweight", "Normal", "Overweight", "Obese")
+)
+brfss1$INCOMG1 <- factor(
+  brfss1$INCOMG1,
+  levels = c("<$15k", "$15-25k", "$25-35k", "$35-50k", "$50k-$100k", "$100k-$200k", ">$200k")
+)
+brfss1$SMOKER3 <- factor(
+  brfss1$SMOKER3,
+  levels = c("Never smoked", "Former smoker", "Someday smoker", "Everyday smoker")
+)
+brfss1$EXERANY2  <- factor(brfss1$EXERANY2)
+brfss1$MARITAL  <- factor(brfss1$MARITAL)
+brfss1$EDUCA  <- factor(brfss1$EDUCA)
+brfss1$EMPLOY1  <- factor(brfss1$EMPLOY1)
+brfss1$RACE  <- factor(brfss1$RACE)
+brfss1$SEX  <- factor(brfss1$SEX)
+brfss1$AGEG5YR <- factor(
+  brfss1$AGEG5YR,
+  levels = c(
+    "18-24", "25-29", "30-34", "35-39", "40-44",
+    "45-49", "50-54", "55-59", "60-64", "65-69",
+    "70-74", "75-79", "80+"
+  )
+)
+brfss1$state_name  <- factor(brfss1$state_name)
+```
+
+```{r}
+# We are creating 4 distinct levels based on the days reported
+brfss1 <- brfss1 %>%
+  mutate(MENTHLTH_CAT = case_when(
+    MENTHLTH == 0 ~ "0: Resilient",
+    MENTHLTH >= 1 & MENTHLTH <= 13 ~ "1-13: Low/Moderate",
+    MENTHLTH >= 14 & MENTHLTH <= 29 ~ "14-29: Frequent",
+    MENTHLTH == 30 ~ "30: Chronic"
+  ))
+ 
+brfss1$MENTHLTH_CAT <- factor(brfss1$MENTHLTH_CAT, 
+                               levels = c("0: Resilient", 
+                                          "1-13: Low/Moderate", 
+                                          "14-29: Frequent", 
+                                          "30: Chronic"),ordered = TRUE)
+ 
+table(brfss1$MENTHLTH_CAT)
+ 
+```
+
+```{r}
+summary(brfss1$MENTHLTH)
+sd(brfss1$MENTHLTH, na.rm = TRUE)
+IQR(brfss1$MENTHLTH, na.rm = TRUE)
+
+weighted.mean(brfss1$MENTHLTH, w = brfss1$LLCPWT, na.rm = TRUE)
+
+```
+The sample slightly under represents people with worse mental health.
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(scales)
+ggplot(brfss1, aes(x = MENTHLTH)) +
+  geom_histogram(binwidth = 1) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Distribution of Poor Mental Health Days",
+    x = "Poor mental health days in past 30 days",
+    y = "Count"
+  )
+
+ggplot(brfss1, aes(y = MENTHLTH)) +
+  geom_boxplot() +
+  labs(
+    title = "Boxplot of Poor Mental Health Days",
+    y = "Poor mental health days"
+  )
+
+```
+
+The distribution of poor mental health days is highly right-skewed, with a large concentration of observations at zero. This indicates that a substantial proportion of respondents reported no poor mental health days in the past 30 days. The frequency decreases as the number of poor mental health days increases, with a long tail extending toward the maximum value of 30 days. A noticeable spike at 30 suggests a group of respondents experiencing poor mental health throughout the entire month. The mean is greater than the median, further confirming the presence of positive skewness.
+
+```{r}
+thirty_day_group <- brfss1 %>% filter(MENTHLTH == 30)
+summary(thirty_day_group$SDLONELY)
+summary(thirty_day_group$HOWSAFE1)
+
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+brfss_plot <- brfss1 %>%
+  filter(MENTHLTH %in% c(0, 30)) %>% 
+  mutate(mental_status = ifelse(MENTHLTH == 0, "0 Days (Healthy)", "30 Days (Chronic)"))
+
+```
+
+
+
+```{r}
+ggplot(brfss_plot, aes(x = mental_status, fill = HOWSAFE1)) +
+  geom_bar(position = "fill") + 
+  scale_y_continuous(labels = percent) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Reds", direction = -1) +
+  labs(title = "Safety Composition: Healthy vs. Chronic Mental Health",
+       subtitle = "The 'Unsafe' slice gets bigger in the 30-day group",
+       x = "Mental Health Status", y = "Percentage", fill = "Perceived Safety")
+```
+```{r}
+ggplot(brfss_plot, aes(x = mental_status, fill = SDLONELY)) +
+  geom_bar(position = "dodge") + 
+  theme_minimal() +
+  scale_fill_brewer(palette = "Purples", direction = -1) +
+  labs(title = "Loneliness Counts: Healthy vs. Chronic Mental Health",
+       subtitle = "Side-by-side comparison of respondent counts",
+       x = "Mental Health Status", 
+       y = "Number of Respondents", 
+       fill = "Loneliness")
+```
+```{r}
+ggplot(brfss_plot, aes(x = SDLONELY, fill = SDLONELY)) +
+  geom_bar() + 
+  facet_wrap(~mental_status, scales = "free_y") + 
+  theme_minimal() +
+  scale_fill_brewer(palette = "Purples", direction = -1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Loneliness Distribution: Healthy vs. Chronic",
+       subtitle = "Internal shape of each group",
+       x = "Loneliness Level", 
+       y = "Number of Respondents")
+```
+
+```{r}
+ggplot(brfss_plot, aes(x = LSATISFY, fill = LSATISFY)) +
+  geom_bar() + 
+  facet_wrap(~mental_status, scales = "free_y") + 
+  theme_minimal() +
+  scale_fill_brewer(palette = "RdYlGn") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Life Satisfaction: Healthy vs. Chronic",
+       subtitle = "Comparing the internal distribution shape",
+       x = "Satisfaction Level", 
+       y = "Number of Respondents")
+
+```
+```{r}
+ggplot(brfss_plot, aes(x = LSATISFY, fill = LSATISFY)) +
+  geom_bar() + 
+  facet_grid(ADDEPEV3 ~ mental_status, scales = "free_y") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Satisfaction by Mental Health and Depression Diagnosis")
+```
+```{r}
+
+ggplot(brfss1, aes(x = SDLONELY, y = MENTHLTH, color = SDLONELY)) +
+  geom_jitter(alpha = 0.1, size = 0.5) + 
+  theme_minimal() +
+  labs(title = "Jittered Distribution: Loneliness vs. Mental Health",
+       subtitle = "Every dot is a person; density shows where the 'middle' lies",
+       x = "Loneliness Level", y = "Days")
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+
+cor_data <- brfss1 %>%
+  select(MENTHLTH, SDLONELY, LSATISFY, HOWSAFE1, EXERANY2) %>%
+  mutate(across(everything(), as.numeric)) %>%
+  drop_na()
+
+cor_matrix <- cor(cor_data, method = "spearman")
+
+
+
+cor_df <- as.data.frame(cor_matrix) %>%
+  mutate(Var1 = rownames(.)) %>%
+  pivot_longer(cols = -Var1, names_to = "Var2", values_to = "Correlation")
+
+# 4. Plot
+ggplot(cor_df, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), 
+                       name="Spearman\nCorr") +
+  geom_text(aes(label = round(Correlation, 2)), size = 4) + # Adds the numbers
+  theme_minimal() +
+  labs(title = "Correlation Heatmap of Research Variables",
+       x = "", y = "")
+
+
+```
+This correlation heatmap reveals meaningful relationships between the study variables. Life satisfaction (LSATISFY) shows the strongest associations, with moderate positive correlations with frequent loneliness (SDLONELY) at 0.39 and poor mental health days (MENTHLTH) at 0.35, indicating that individuals reporting lower life satisfaction also tend to experience more loneliness and poorer mental health. Loneliness (SDLONELY) and MENTHLTH demonstrate the strongest pairwise correlation at 0.40, demonstrating social isolation and psychological distress. Neighbourbood safety (HOWSAFE1) shows weak positive correlations with both life satisfaction (0.22) and mental health (0.13), suggesting a modest protective effect. Exercise (EXERANY2) displays consistently weak negative correlations with all other variables (ranging from -0.05 to -0.14), indicating that physical activity is modestly associated with better life satisfaction, less loneliness, and fewer poor mental health days, though the effects are small. Overall, the pattern suggests that social factors (loneliness and life satisfaction) are more strongly interconnected with mental health than health behaviors or workplace safety are in this sample.
+
+```{r}
+# Checking correlation for Males vs Females
+brfss1 %>%
+  group_by(SEX) %>%
+  summarise(cor_lonely = cor(as.numeric(MENTHLTH), as.numeric(SDLONELY), 
+                             method = "spearman", use = "complete.obs"))
+```
+
+
+Is loneliness more strongly associated with poor mental health for males or females?
+more loneliness → more poor mental health days
+
+```{r}
+ggplot(brfss_plot, aes(x = mental_status, fill = EMPLOY1)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "Employment Composition: Healthy vs. Chronic",
+       y = "Proportion", x = "Mental Health Status", fill = "Employment")
+
+```
+```{r}
+# Visualizing if lower income groups have a higher "burden" of bad days
+ggplot(brfss1, aes(x = INCOMG1, y = MENTHLTH, fill = INCOMG1)) +
+  stat_summary(fun = "mean", geom = "bar") +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
+  labs(title = "Average Poor Mental Health Days by Income Bracket",
+       y = "Mean Days (with Standard Error)", x = "Income Level")
+
+```
+
+```{r}
+ggplot(brfss_plot, aes(x = mental_status, fill = SMOKER3)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  scale_fill_viridis_d(option = "magma") +
+  labs(title = "Smoking Status: Healthy vs. Chronic",
+       x = "Mental Health Status", y = "Proportion", fill = "Smoking Status")
+```
+```{r}
+# Comparing decision-making difficulty in Healthy vs Chronic groups
+ggplot(brfss_plot, aes(x = mental_status, fill = DECIDE)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Decision-Making Difficulty: Healthy vs. Chronic",
+       subtitle = "Proportional comparison of the DECIDE variable",
+       x = "Mental Health Status", y = "Proportion", fill = "Difficulty Deciding")
+
+```
+
+```{r}
+library(dplyr)
+
+brfss1 %>%
+  group_by(SEX) %>%
+  summarise(
+    n = n(),
+    mean_menthlth = mean(MENTHLTH, na.rm = TRUE),
+    median_menthlth = median(MENTHLTH, na.rm = TRUE),
+    sd_menthlth = sd(MENTHLTH, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+```
+
+
+```{r}
+brfss1 %>%
+  group_by(SEX) %>%
+  summarise(
+    weighted_mean_menthlth = weighted.mean(MENTHLTH, LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+Weighted vs un weighted proportion of males vs female
+
+
+```{r}
+sex_rep <- brfss1 %>%
+  group_by(SEX) %>%
+  summarise(
+    n = n(),
+    weighted_total = sum(LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    unweighted_prop = n / sum(n),
+    weighted_prop = weighted_total / sum(weighted_total),
+    diff = weighted_prop - unweighted_prop
+  )
+sex_rep
+```
+
+```{r}
+library(tidyr)
+
+library(ggplot2)
+
+library(scales)
+ 
+sex_rep_long <- sex_rep %>%
+
+  select(SEX, unweighted_prop, weighted_prop) %>%
+
+  pivot_longer(
+
+    cols = c(unweighted_prop, weighted_prop),
+
+    names_to = "type",
+
+    values_to = "proportion"
+
+  )
+ 
+ggplot(sex_rep_long, aes(x = SEX, y = proportion, fill = type)) +
+
+  geom_col(position = "dodge") +
+
+  scale_y_continuous(labels = percent) +
+
+  labs(
+
+    title = "Weighted vs Unweighted Proportions by Sex",
+
+    x = "Sex",
+
+    y = "Proportion",
+
+    fill = "Distribution"
+
+  )
+ 
+```
+The weighted and unweighted proportions by sex are very similar, indicating that the sample is broadly representative of the population with respect to sex. Although females are slightly overrepresented and males slightly underrepresented in the unweighted sample, the differences are minimal (approximately 1–2 percentage points). This suggests that weighting has only a modest impact on the distribution by sex.
+
+```{r}
+ggplot(brfss1, aes(x = SEX, y = MENTHLTH)) +
+  geom_boxplot() +
+  labs(
+    title = "Poor Mental Health Days by Sex",
+    x = "Sex",
+    y = "Poor mental health days"
+  )
+```
+The boxplot comparing poor mental health days by sex shows that both males and females have a highly right-skewed distribution, with a median of zero in both groups. While the overall patterns are similar, females exhibit slightly greater variability and a somewhat wider spread in the upper range compared to males. This suggests a potential difference in the distribution of poor mental health days across sexes, which can be further evaluated using formal statistical testing.
+
+```{r}
+# Creating a bar chart to see the proportion of 0-day vs 30-day by Sex
+ggplot(brfss_plot, aes(x = mental_status, fill = SEX)) +
+  geom_bar(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Mental Health Status by Sex",
+       subtitle = "Comparing the counts of Healthy (0) vs. Chronic (30) reports",
+       x = "Mental Health Group", y = "Count", fill = "Sex")
+
+```
+ 
+```{r}
+# Density plot to see the 'shape' of mental health for both sexes
+ggplot(brfss1, aes(x = MENTHLTH, fill = SEX)) +
+  geom_density(alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "The Full Spectrum: Mental Health Density by Sex",
+       subtitle = "Visualizing the 'Valley' between 0 and 30 days",
+       x = "Number of Poor Mental Health Days", y = "Density")
+```
+This density plot reveals the distinct distribution patterns of poor mental health days for males and females. Both sexes exhibit a steep decline from a peak at zero days, followed by a secondary, smaller peak in the range of frequent distress (approximately 14–30 days). However, females consistently show a higher density across nearly all values, particularly at the left tail (zero days) where the female density exceeds that of males. The secondary peak at higher values is also more elevated for females, suggesting that women in this sample experience both higher prevalence and greater severity of mental health distress compared to men. Mass concentrated at both ends of the distribution indicates that mental health burden is not uniformly distributed across the population, but rather clustered among those with resilient (zero days) and chronically distressed (near 30 days) ones, with females over represented in both groups.
+
+```{r}
+ggplot(brfss1, aes(x = MENTHLTH, fill = SEX)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ AGEG5YR) + 
+  theme_minimal() +
+  labs(title = "Mental Health Density Across the Lifespan",
+       x = "Days", y = "Density")
+
+```
+
+```{r}
+middle_summary <- brfss1 %>%
+  mutate(group = case_when(
+    MENTHLTH == 0 ~ "Healthy",
+    MENTHLTH == 30 ~ "Chronic",
+    TRUE ~ "Middle"
+  )) %>%
+  group_by(AGEG5YR, SEX, group) %>%
+  summarise(n = n()) %>%
+  mutate(pct = n / sum(n) * 100) %>%
+  filter(group == "Middle")
+
+ggplot(middle_summary, aes(x = SEX, y = AGEG5YR, fill = pct)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "darkred") +
+  geom_text(aes(label = round(pct, 1))) +
+  theme_minimal() +
+  labs(title = "Percentage of People in the 'Middle Group' (1-29 Days)",
+       subtitle = "Higher numbers mean more people reporting moderate distress",
+       fill = "% Middle")
+
+```
+```{r}
+# Creating a 4-group classification
+brfss1 <- brfss1 %>%
+  mutate(mental_health_cat = case_when(
+    MENTHLTH == 0 ~ "0: Resilient",
+    MENTHLTH >= 1 & MENTHLTH <= 13 ~ "1-13: Low/Moderate",
+    MENTHLTH >= 14 & MENTHLTH <= 29 ~ "14-29: Frequent",
+    MENTHLTH == 30 ~ "30: Chronic"
+  ))
+
+# Plotting the breakdown by Sex
+ggplot(brfss1, aes(x = SEX, fill = mental_health_cat)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  labs(title = "Detailed Mental Health Categories by Sex",
+       subtitle = "Splitting the 'Middle' into Moderate and Frequent Distress",
+       x = "Sex", y = "Proportion of Population", fill = "Distress Level")
+```
+```{r}
+brfss1 <- brfss1 %>%
+  mutate(mental_health_cat = case_when(
+    MENTHLTH == 0 ~ "0: Resilient",
+    MENTHLTH >= 1 & MENTHLTH <= 13 ~ "1-13: Low/Moderate",
+    MENTHLTH >= 14 & MENTHLTH <= 29 ~ "14-29: Frequent",
+    MENTHLTH == 30 ~ "30: Chronic"
+  ))
+
+#Plotting the mental health category by Race/Ethnicity
+ggplot(brfss1, aes(x = RACE, fill = mental_health_cat)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mental Health Categories by Race/Ethnicity",
+       subtitle = "Analyzing clinical distress levels across different groups",
+       x = "Race/Ethnicity", y = "Proportion of Population", fill = "Distress Level")
+
+```
+
+
+
+
+```{r}
+sex_mean <- brfss1 %>%
+
+  group_by(SEX) %>%
+
+  summarise(
+
+    weighted_mean_menthlth = weighted.mean(MENTHLTH, LLCPWT, na.rm = TRUE),
+
+    .groups = "drop"
+
+  )
+ 
+ggplot(sex_mean, aes(x = SEX, y = weighted_mean_menthlth, fill = SEX)) +
+
+  geom_col() +
+
+  labs(
+
+    title = "Weighted Mean Poor Mental Health Days by Sex",
+
+    x = "Sex",
+
+    y = "Weighted mean poor mental health days"
+
+  ) +
+
+  guides(fill = "none")
+ 
+```
+
+
+```{r}
+library(dplyr)
+
+brfss1 %>%
+  group_by(AGEG5YR) %>%
+  summarise(
+    n = n(),
+    mean_menthlth = mean(MENTHLTH, na.rm = TRUE),
+    median_menthlth = median(MENTHLTH, na.rm = TRUE),
+    sd_menthlth = sd(MENTHLTH, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+```{r}
+brfss1 %>%
+  group_by(AGEG5YR) %>%
+  summarise(
+    weighted_mean_menthlth = weighted.mean(MENTHLTH, LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+```{r}
+age_rep <- brfss1 %>%
+  group_by(AGEG5YR) %>%
+  summarise(
+    n = n(),
+    weighted_total = sum(LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    unweighted_prop = n / sum(n),
+    weighted_prop = weighted_total / sum(weighted_total),
+    diff = weighted_prop - unweighted_prop
+  )
+age_rep
+```
+
+
+```{r}
+library(tidyr)
+
+library(ggplot2)
+
+library(scales)
+ 
+age_rep_long <- age_rep %>%
+
+  select(AGEG5YR, unweighted_prop, weighted_prop) %>%
+
+  pivot_longer(
+
+    cols = c(unweighted_prop, weighted_prop),
+
+    names_to = "type",
+
+    values_to = "proportion"
+
+  )
+ 
+ggplot(age_rep_long, aes(x = AGEG5YR, y = proportion, fill = type)) +
+
+  geom_col(position = "dodge") +
+
+  scale_y_continuous(labels = percent) +
+
+  labs(
+
+    title = "Weighted vs Unweighted Proportions by Age",
+
+    x = "Age",
+
+    y = "Proportion",
+
+    fill = "Distribution"
+
+  )
+```
+The comparison between weighted and unweighted age distributions reveals noticeable differences, indicating that the sample is not perfectly representative of the population. Younger age groups are underrepresented in the sample, while older age groups are overrepresented. This highlights the importance of incorporating survey weights in the analysis to obtain population-level estimates.
+
+```{r}
+ggplot(brfss1, aes(x = AGEG5YR, y = MENTHLTH)) +
+   geom_boxplot(outlier.alpha = 0.4) +
+  labs(
+    title = "Poor Mental Health Days by Age",
+    x = "Age",
+    y = "Poor mental health days")
+```
+
+Poor mental health days are highest among younger age groups (18–34), with higher medians and wider variability. As age increases, both the median and spread decrease, indicating fewer reported poor mental health days in older groups. Most older age groups (65+) have medians close to 0–1 days, suggesting generally better reported mental well-being.
+However, outliers exist across all ages, meaning some individuals in every group experience high levels of distress.
+
+
+```{r}
+ggplot(brfss1, aes(x = AGEG5YR, y = MENTHLTH, fill=SEX)) +
+  coord_flip()+
+   geom_boxplot(outlier.alpha = 0.4, outlier.shape = NA) +
+  labs(
+    title = "Poor Mental Health Days by Age",
+    x = "Age",
+    y = "Poor mental health days"
+  )
+```
+
+
+
+
+```{r}
+age_mean <- brfss1 %>%
+
+  group_by(AGEG5YR) %>%
+
+  summarise(
+
+    weighted_mean_menthlth = weighted.mean(MENTHLTH, LLCPWT, na.rm = TRUE),
+
+    .groups = "drop"
+
+  )
+ 
+ggplot(age_mean, aes(x = AGEG5YR, y = weighted_mean_menthlth, fill = AGEG5YR)) +
+
+  geom_col() +
+
+  labs(
+
+    title = "Weighted Mean Poor Mental Health Days by Age",
+
+    x = "Age",
+
+    y = "Weighted mean poor mental health days"
+
+  ) +
+
+  guides(fill = "none")
+```
+
+```{r}
+age_mean <- brfss1 %>%
+
+  group_by(AGEG5YR) %>%
+
+  summarise(
+
+    mean_menthlth = mean(MENTHLTH, na.rm = TRUE),
+
+    .groups = "drop"
+
+  )
+ 
+ggplot(age_mean, aes(x = AGEG5YR, y = mean_menthlth, fill = AGEG5YR)) +
+
+  geom_col() +
+
+  labs(
+
+    title = "Mean Poor Mental Health Days by Age",
+
+    x = "Age",
+
+    y = " Mean poor mental health days"
+
+  ) +
+
+  guides(fill = "none")
+
+```
+```{r}
+
+library(dplyr)
+
+brfss1 %>%
+  group_by(INCOMG1) %>%
+  summarise(
+    n = n(),
+    mean_menthlth = mean(MENTHLTH, na.rm = TRUE),
+    median_menthlth = median(MENTHLTH, na.rm = TRUE),
+    sd_menthlth = sd(MENTHLTH, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+```{r}
+brfss1 %>%
+  group_by(INCOMG1) %>%
+  summarise(
+    weighted_mean_menthlth = weighted.mean(MENTHLTH, LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+income_rep <- brfss1 %>%
+  group_by(INCOMG1) %>%
+  summarise(
+    n = n(),
+    weighted_total = sum(LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    unweighted_prop = n / sum(n),
+    weighted_prop = weighted_total / sum(weighted_total),
+    diff = weighted_prop - unweighted_prop
+  )
+income_rep
+```
+
+
+```{r}
+ggplot(brfss1, aes(x = INCOMG1, y = MENTHLTH, fill = SEX)) +
+   geom_boxplot(outlier.alpha = 0.4) +
+  labs(
+    title = "Poor Mental Health Days by Income",
+    x = "Income",
+    y = "Poor mental health days")
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+ 
+ggplot(
+  brfss1 %>% filter(!is.na(INCOMG1), !is.na(SMOKER3)),
+  aes(x = INCOMG1, fill = SMOKER3)
+) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    x = "Income Group",
+    y = "Proportion",
+    fill = "SMOKER3",
+    title = "Distribution of smoking habit  by Income Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ 
+```
+
+```{r}
+
+ggplot(brfss1, aes(x = MENTHLTH_CAT, fill = MENTHLTH_CAT)) +
+  geom_bar() +
+  theme_minimal() +
+  scale_fill_viridis_d(option = "mako", guide = "none") +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Distribution of Mental Health Categories",
+       x = "Mental Health Category", y = "Number of Respondents")
+
+```
+
+
+```{r}
+unweighted_gender <- brfss1|>
+  filter(!is.na(SEX))|>
+  group_by(SEX) |>
+  summarise(
+    count = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    proportion = count / sum(count),
+  )
+```
+
+```{r}
+weighted_gender <- brfss1 |>
+  filter(!is.na(SEX))|>
+  group_by(SEX) |>
+  summarise(
+    weighted_count = sum(LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    proportion = weighted_count / sum(weighted_count)
+  )
+```
+
+```{r}
+combined_Gender <- bind_rows(
+  unweighted_gender |>
+    select(SEX,proportion)|>
+    mutate(Type = "Unweighted (Sample)"),
+  
+   weighted_gender |>
+    select(SEX,proportion)|>
+    mutate(Type = "Weighted (Population)"),
+)
+```
+
+
+```{r fig.width = 10}
+ggplot(combined_Gender, aes(x = SEX, y = proportion, fill = Type)) +
+  geom_col(position = "dodge",width=0.8) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  coord_flip()+
+  labs(
+    title = "Distribution of Respondents by Gender",
+    x = "Gender",
+    y = "Proportion",
+    fill = "Distribution"
+  ) +
+  theme_minimal() +
+  theme(
+        plot.title = element_text(face = "bold",hjust=0.4),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"))
+
+```
+
+
+```{r}
+# Grouped Bar Chart by Sex
+ggplot(brfss1, aes(x = MENTHLTH_CAT, fill = SEX)) +
+  geom_bar(position = "dodge") + 
+  theme_minimal() +
+  scale_y_continuous(labels = comma) + 
+  scale_fill_viridis_d(option = "mako", end = 0.8) + 
+  labs(title = "Mental Health Categories by Sex",
+       subtitle = "Comparing raw counts of distress levels between Males and Females",
+       x = "Mental Health Category", 
+       y = "Number of Respondents",
+       fill = "Sex")
+
+```
+```{r}
+library(dplyr)
+
+# Percentage Bar Plot by Gender
+ggplot(brfss1, aes(x = SEX, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  
+  geom_text(aes(label = percent(after_stat(count)/tapply(after_stat(count), after_stat(x), sum)[after_stat(x)], accuracy = 0.1)),
+            stat = "count",
+            position = position_fill(vjust = 0.5),
+            size = 4,
+            color = "red",
+            fontface = "bold") +
+  theme_minimal() +
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  labs(title = "Probability of Mental Health Distress by Gender",
+       subtitle = "Comparing the relative risk for Males vs. Females",
+       x = "Gender", 
+       y = "Percentage (100%)", 
+       fill = "Distress Level")
+```
+```{r}
+
+# Grouped Bar Chart for all 4 Categories
+ggplot(brfss1, aes(x = MENTHLTH_CAT, fill = SEX)) +
+  geom_bar(position = "dodge") +
+  theme_minimal() +
+
+  scale_fill_manual(values = c("Female" = "#E07A5F", "Male" = "#3D405B")) + 
+  scale_y_continuous(labels = comma) + 
+  labs(title = "Detailed Mental Health Distribution by Sex",
+       subtitle = "Comparing raw volume across the full spectrum of distress",
+       x = "Mental Health Category", 
+       y = "Number of Respondents",
+       fill = "Sex") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+```
+
+```{r}
+# Mental Health Category by Income Level
+income_eda <- ggplot(brfss1, aes(x = INCOMG1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") + 
+  theme_minimal() +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Proportion of Mental Health Distress by Income",
+       x = "Income Group", y = "Proportion", fill = "Distress Level")
+print(income_eda)
+ggsave("missingpercent_variables.png", width = 8, height = 5, dpi = 300)
+
+```
+
+The "Total Distress" drops from 50% at the low end to about 35% at the high end. Want to test the 15% gap for "Statistical Significance" later.
+
+```{r}
+unweighted_income <- brfss1|>
+  filter(!is.na(INCOMG1))|>
+  group_by(INCOMG1) |>
+  summarise(
+    count = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    proportion = count / sum(count),
+  )
+```
+
+```{r}
+weighted_income <- brfss1 |>
+  filter(!is.na(INCOMG1))|>
+  group_by(INCOMG1) |>
+  summarise(
+    weighted_count = sum(LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    proportion = weighted_count / sum(weighted_count)
+  )
+```
+
+```{r}
+combined_INCOME <- bind_rows(
+  unweighted_income |>
+    select(INCOMG1,proportion)|>
+    mutate(Type = "Unweighted (Sample)"),
+  
+   weighted_income |>
+    select(INCOMG1,proportion)|>
+    mutate(Type = "Weighted (Population)"),
+)
+```
+
+
+```{r fig.width = 10}
+ggplot(combined_INCOME, aes(x = INCOMG1, y = proportion, fill = Type)) +
+  geom_col(position = "dodge",width=0.8) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  coord_flip()+
+  labs(
+    title = "Distribution of Respondents by Income",
+    x = "Income",
+    y = "Proportion",
+    fill = "Distribution"
+  ) +
+  theme_minimal() +
+  theme(
+        plot.title = element_text(face = "bold",hjust=0.4),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"))
+
+```
+
+```{r}
+
+# Grouped Bar Chart for all 4 categories
+ggplot(brfss1, aes(x = MENTHLTH_CAT, fill = INCOMG1)) +
+  geom_bar(position = "dodge") + 
+  theme_minimal() +
+  scale_y_continuous(labels = comma) + 
+  labs(title = "Detailed Mental Health Distribution by Income group",
+       x = "Mental Health Category", 
+       y = "Number of Respondents",
+       fill = "Income Group") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+
+```
+
+
+```{r}
+# Stacked percentage plot for Age Groups
+ggplot(brfss1, aes(x = AGEG5YR, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  labs(title = "Mental Health Categories by Age Group",
+       subtitle = "Visualizing how resilience and distress shift across the lifespan",
+       x = "Age Group (5-Year Intervals)", 
+       y = "Percentage of Age Group",
+       fill = "Distress Level") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r fig.width=10,fig.height=7}
+# Grouped Bar Chart by Sex
+ggplot(brfss1, aes(x = AGEG5YR, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "dodge") + 
+  coord_flip()+
+  theme_minimal() +
+  scale_y_continuous(labels = comma) + 
+  labs(title = "Mental Health Categories by Age Group",
+       subtitle = "Comparing raw counts of distress levels between Age Groups",
+       x = "Mental Health Category", 
+       y = "Number of Respondents",
+       fill = "Age Group")
+
+```
+
+
+```{r}
+# Mental Health by Employment Status
+ggplot(brfss1, aes(x = EMPLOY1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Mental Health Distribution by Employment Status",
+       x = "Employment Status", y = "Proportion", fill = "Distress Level")
+```
+
+```{r}
+# Interaction of Employment and Sex
+ggplot(brfss1, aes(x = EMPLOY1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~SEX) + 
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Employment and Mental Health: A Gender Comparison",
+       x = "Employment Status", y = "Proportion")
+```
+
+
+```{r}
+
+# Plotting the mental health category by Race/Ethnicity
+ggplot(brfss1, aes(x = RACE, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  coord_flip()+
+  theme_minimal() +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Mental Health Categories by Race/Ethnicity",
+       subtitle = "Analyzing clinical distress levels across different groups",
+       x = "Race/Ethnicity", y = "Proportion of Population", fill = "Distress Level")
+
+```
+```{r}
+unweighted_race <- brfss1|>
+  filter(!is.na(RACE))|>
+  group_by(RACE) |>
+  summarise(
+    count = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    proportion = count / sum(count),
+  )
+```
+
+
+```{r}
+weighted_race <- brfss1 |>
+  filter(!is.na(RACE))|>
+  group_by(RACE) |>
+  summarise(
+    weighted_count = sum(LLCPWT, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    proportion = weighted_count / sum(weighted_count)
+  )
+```
+
+```{r}
+combined_race <- bind_rows(
+  unweighted_race |>
+    select(RACE,proportion)|>
+    mutate(Type = "Unweighted (Sample)"),
+  
+   weighted_race |>
+    select(RACE,proportion)|>
+    mutate(Type = "Weighted (Population)"),
+)
+```
+
+
+```{r fig.width = 10}
+ggplot(combined_race, aes(x = RACE, y = proportion, fill = Type)) +
+  geom_col(position = "dodge",width=0.8) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  coord_flip()+
+  labs(
+    title = "Distribution of Respondents by Race",
+    x = "Race",
+    y = "Proportion",
+    fill = "Distribution"
+  ) +
+  theme_minimal() +
+  theme(
+        plot.title = element_text(face = "bold",hjust=0.4),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"))
+
+```
+
+
+
+```{r}
+ggplot(brfss1, aes(x = RACE, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "dodge") + 
+  coord_flip()+
+  theme_minimal() +
+  scale_y_continuous(labels = comma) + 
+  labs(title = "Mental Health Categories by Age Group",
+       subtitle = "Comparing raw counts of distress levels between Age Groups",
+       x = "Mental Health Category", 
+       y = "Number of Respondents",
+       fill = "Age Group")
+
+```
+
+```{r}
+# Visualizing Significance of Two Factors Combined
+ggplot(brfss1, aes(x = INCOMG1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  coord_flip()+
+  facet_wrap(~SEX) + 
+  theme_minimal() +
+  scale_y_continuous(labels = percent) +
+  labs(title = "The Intersection of Gender and Income on Mental Health",
+       subtitle = "Does a high income protect women as much as it protects men?",
+       x="Income Group",
+       y="Percentage"
+       )
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+heatmap_data <- brfss1 %>%
+  group_by(AGEG5YR, SEX, MENTHLTH_CAT) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(AGEG5YR, SEX) %>%
+  mutate(percentage = (n / sum(n)) * 100)
+
+ggplot(heatmap_data, aes(x = SEX, y = AGEG5YR, fill = percentage)) +
+  geom_tile(color = "white") +
+  facet_wrap(~MENTHLTH_CAT, ncol = 4) + 
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b") + 
+  geom_text(aes(label = round(percentage, 1)), size = 3) +
+  theme_minimal() +
+  labs(title = "Heatmap of Mental Health Distribution",
+       subtitle = "Percentage of each Age/Sex group falling into each category",
+       x = "Sex", 
+       y = "Age Group", 
+       fill = "% of Group") +
+  theme(panel.spacing = unit(2, "lines")) # Adds space between the 4 plots
+
+```
+The heatmap shows clear differences in mental health burden across both age and sex. Older age groups have substantially higher proportions in the resilient category and lower proportions in the frequent and chronic categories, indicating that poor mental health burden generally decreases with age. Across most age groups, males show higher proportions in the resilient category, whereas females more often appear in the frequent and chronic categories. The youngest age groups, particularly 18–24 and 25–29, display the highest mental health burden, suggesting that young adult females and males are relatively higher-risk groups, with the burden generally more pronounced among females.
+
+
+
+1. The "Resilient" Concentration (0: Resilient)
+The Darkest Spot: the top-right corner of the first panel (Males 80+: 84%). This is the highest level of mental health stability.
+
+Among 18-24 year olds, only 30.6% of Females are resilient, compared to 77% of Females 80+. This is a massive 46% gap purely based on age.
+
+2. The "Middle-Class" of Distress (1-13: Low/Moderate)
+For younger people (18-34), this is the dominant state, not 0 days.
+
+The peak part of this map is Females 18-29 (42.5%). This suggests that while young women aren't necessarily "Chronic," they are significantly more likely to live in a moderate distress.
+
+3. The "Frequent" Gender Gap (14-29: Frequent)
+In almost every age bracket, the Female column is significantly darker.
+
+In the 18-24 bracket, 18.9% of Females report frequent distress, nearly double the 11.6% of Males. 
+
+4. The "Chronic" Ceiling (30: Chronic)
+The 30-day "Chronic" group is relatively stable across age for females (staying around 8%) but actually drops for older males.
+
+Key Finding: While "Resilience" grows significantly with age, "Chronic" distress doesn't disappear at the same rate. This suggests that the people who struggle with 30-day chronic issues may be dealing with factors (like chronic illness or disability) that persist regardless of age.
+
+
+
+```{r}
+# Visualizing if lower income groups have a higher "burden" of bad days
+ggplot(brfss1, aes(x = INCOMG1, y = MENTHLTH, fill = INCOMG1)) +
+  stat_summary(fun = "mean", geom = "bar") +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
+  labs(title = "Average Poor Mental Health Days by Income Bracket",
+       y = "Mean Days (with Standard Error)", x = "Income Level")
+
+```
+The plot shows a clear decreasing trend in average poor mental health days as income increases. Individuals in the lowest income group (<$15k) report the highest average number of poor mental health days, while those in the highest income group (>$200k) report the lowest. The small standard errors indicate that these estimates are precise. This suggests a strong negative association between income and mental health burden, where lower-income individuals experience significantly worse mental health outcomes.
+
+```{r}
+brfss_lonely <- brfss1 %>%
+  filter(!is.na(SDLONELY))
+
+ggplot(brfss_lonely, aes(x = SDLONELY, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme_minimal() +
+  labs(title = "Mental Health Distribution by Loneliness Frequency",
+       subtitle = "Social Determinants: Visualizing the impact of social isolation",
+       x = "How often do you feel lonely?", 
+       y = "Proportion of Respondents",
+       fill = "Distress Level") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+ggplot(brfss1, aes(x = SDLONELY, fill = SDLONELY)) +
+  geom_bar() + 
+  facet_wrap(~MENTHLTH_CAT, scales = "free_y") + 
+  theme_minimal() +
+  scale_fill_brewer(palette = "Purples", direction = -1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Loneliness Distribution",
+       subtitle = "Using 'free_y' scales to show the internal shape of each group",
+       x = "Loneliness Level", 
+       y = "Number of Respondents")
+```
+
+
+
+```{r}
+
+# Calculate percentages for the heatmap
+lonely_heatmap <- brfss_lonely %>%
+  group_by(AGEG5YR, SDLONELY, MENTHLTH_CAT) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(AGEG5YR, SDLONELY) %>%
+  mutate(percentage = (n / sum(n)) * 100)
+
+# Heat map focusing on the '0: Resilient' group
+ggplot(filter(lonely_heatmap, MENTHLTH_CAT == "0: Resilient"), 
+       aes(x = SDLONELY, y = AGEG5YR, fill = percentage)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b") +
+  geom_text(aes(label = round(percentage, 0)), size = 3) +
+  theme_minimal() +
+  labs(title = "Resilience Map: Age vs. Loneliness",
+       subtitle = "% of People with 0 Days of Poor Mental Health",
+       x = "Loneliness Frequency", 
+       y = "Age Group", 
+       fill = "% Resilient") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+The graph suggests that resilience is highest among older adults and lowest among individuals who report frequent loneliness. Across all age groups, increasing loneliness is associated with a marked decline in the proportion of people reporting zero poor mental health days.
+
+```{r}
+
+# Visualizing if lower income groups have a higher "burden" of bad days
+ggplot(brfss1, aes(x = SDLONELY, y = MENTHLTH, fill = SDLONELY)) +
+  stat_summary(fun = "mean", geom = "bar") +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
+  labs(title = "Average Poor Mental Health Days by Loneliness",
+       y = "Mean Days (with Standard Error)", x = "Loneliness Frequency")
+
+```
+
+```{r}
+
+# Life Satisfaction vs. Mental Health Categories
+ggplot(brfss1, aes(x = LSATISFY, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "magma", direction = -1) +
+  theme_minimal() +
+  labs(title = "The Relationship Between Life Satisfaction and Mental Health",
+       x = "How satisfied are you with your life?", 
+       y = "Proportion", 
+       fill = "Distress Level")
+
+```
+
+```{r}
+# Does Life Satisfaction buffer the effect of Low Income?
+ggplot(brfss1, aes(x = INCOMG1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~LSATISFY) + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Life Satisfaction as a Buffer for Socioeconomic Distress",
+       x = "Income Group", 
+       y = "Proportion")
+```
+
+```{r}
+# Plot: Income faceted by Loneliness
+ggplot(brfss1, aes(x = INCOMG1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~SDLONELY, ncol = 3) + 
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position = "bottom") +
+  labs(title = "The Interaction of Poverty and Social Isolation",
+       subtitle = "Comparing mental health distributions across income and loneliness levels",
+       x = "Income Group", 
+       y = "Proportion",
+       fill = "Mental Health Category")
+```
+
+The relationship between income and mental health varies across levels of loneliness. Among individuals who never feel lonely, mental health outcomes are generally favorable across all income groups, indicating minimal influence of income. However, as loneliness increases, the proportion of individuals in frequent and chronic mental health categories rises substantially across all income levels. While lower-income groups tend to show slightly worse outcomes at moderate levels of loneliness, the effect of loneliness becomes dominant at higher levels, with poor mental health observed across all income groups. This suggests that loneliness has a stronger association with mental health than income, and that the impact of income is moderated by loneliness.
+
+
+```{r}
+ggplot(brfss1, aes(x = MENTHLTH_CAT, fill = HOWSAFE1)) +
+  geom_bar(position = "fill") + 
+  scale_y_continuous(labels = percent) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Reds", direction = -1) +
+  labs(title = "Safety Composition: Healthy vs. Chronic Mental Health",
+       subtitle = "Does the 'Unsafe' slice get bigger in the 30-day group?",
+       x = "Mental Health Status", y = "Percentage", fill = "Perceived Safety")
+
+```
+
+```{r}
+#Life Satisfaction vs. Mental Health Categories
+ggplot(brfss1, aes(x = HOWSAFE1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = percent) +
+  scale_fill_viridis_d(option = "magma", direction = -1) +
+  theme_minimal() +
+  labs(title = "The Relationship Between Environmemt safety and Mental Health",
+       x = "Environment safety", 
+       y = "Proportion", 
+       fill = "Distress Level")
+```
+
+The distribution of mental health categories varies substantially with perceived environmental safety. Individuals who feel extremely safe are predominantly in the resilient category, whereas those who feel unsafe or extremely unsafe show a much higher proportion of frequent and chronic poor mental health days. This indicates a clear negative association between perceived safety and mental health, where lower perceived safety corresponds to greater mental health burden.
+
+
+```{r}
+#The Interaction of Safety and Income
+ggplot(brfss1, aes(x = INCOMG1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~HOWSAFE1) + 
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Environmental Safety as a Socioeconomic Buffer",
+       subtitle = "Comparing mental health across Income and Neighborhood Safety",
+       x = "Income Group", 
+       y = "Proportion",
+       fill = "Mental Health Level")
+```
+
+The faceted stacked bar chart suggests that income is associated with mental health within each safety level, with higher-income groups generally showing larger resilient proportions and smaller chronic proportions than lower-income groups. However, perceived safety also plays an important role: as neighborhood safety declines from extremely safe to extremely unsafe, the mental health distribution worsens across all income groups. This suggests that both income and perceived safety are related to mental health, and that the effect of income may vary depending on the safety context.
+
+
+```{r}
+library(ggplot2)
+
+ggplot(brfss1, aes(x = RACE, y = MENTHLTH)) +
+  geom_boxplot() +
+  labs(
+    x = "Race/Ethnicity",
+    y = "Poor mental health days",
+    title = "Poor Mental Health Days by Race/Ethnicity"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+brfss_safe <- brfss1 %>%
+  filter(!is.na(HOWSAFE1), !is.na(SEX))
+
+ggplot(brfss_safe, aes(x = HOWSAFE1, fill = MENTHLTH_CAT)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~SEX) + 
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_viridis_d(option = "mako", direction = -1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Neighborhood Safety and Gender Disparities in Mental Health",
+       subtitle = "Does environmental unsafety disproportionately impact one gender?",
+       x = "Perceived Neighborhood Safety", 
+       y = "Proportion",
+       fill = "Mental Health Level")
+```
